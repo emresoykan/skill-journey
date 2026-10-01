@@ -21,6 +21,8 @@ let enabled = true;
 let prepared = false;
 
 const emit = () => listeners.forEach(listener => listener());
+// Geliştirmede ses sorunlarını Metro loguna yazar; yayında sessiz kalır.
+const report = (step: string) => (error: unknown) => { if (__DEV__) console.warn(`[ses] ${step}`, error); };
 
 function player(sound: Sound) {
   let current = players[sound];
@@ -37,18 +39,18 @@ export function prepareSounds() {
   if (prepared) return;
   prepared = true;
   // Efektler iOS sessiz anahtarına uyar ve kullanıcının müziğinin üstüne karışır.
-  setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
-  AsyncStorage.getItem(KEY).then(value => { if (value === 'off') { enabled = false; emit(); } }).catch(() => {});
-  try { (Object.keys(sources) as Sound[]).forEach(player); } catch {}
+  setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(report('setAudioModeAsync'));
+  AsyncStorage.getItem(KEY).then(value => { if (value === 'off') { enabled = false; emit(); } }).catch(report('tercih okunamadı'));
+  try { (Object.keys(sources) as Sound[]).forEach(player); } catch (error) { report('oynatıcı oluşturulamadı')(error); }
 }
 
 export function playSound(sound: Sound) {
   if (!enabled) return;
   try {
     const current = player(sound);
-    current.seekTo(0).catch(() => {});
+    current.seekTo(0).catch(report(`${sound} seekTo`));
     current.play();
-  } catch {}
+  } catch (error) { report(`${sound} play`)(error); }
 }
 
 export function setSoundEnabled(next: boolean) {
