@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Analysis } from './mockAnalysis';
+import type { Analysis, SkillAward } from './mockAnalysis';
 
-export type Entry = Analysis & { id: string; createdAt: string; description: string };
+// bonusXp: günlük görevden gelen ek XP; beceriye değil toplam XP'ye eklenir.
+export type Entry = Analysis & { id: string; createdAt: string; description: string; bonusXp?: number };
 const KEY = 'skill-journey:entries:v1';
 
 export async function loadEntries(): Promise<Entry[]> {
@@ -9,7 +10,16 @@ export async function loadEntries(): Promise<Entry[]> {
   if (!stored) return [];
   const parsed: unknown = JSON.parse(stored);
   if (!Array.isArray(parsed)) return [];
-  return parsed.filter((entry): entry is Entry => !!entry && typeof entry === 'object' && typeof entry.id === 'string' && typeof entry.description === 'string' && typeof entry.skill === 'string' && typeof entry.xp === 'number' && typeof entry.createdAt === 'string');
+  return parsed
+    .filter((entry): entry is Entry => !!entry && typeof entry === 'object' && typeof entry.id === 'string' && typeof entry.description === 'string' && typeof entry.skill === 'string' && typeof entry.xp === 'number' && typeof entry.createdAt === 'string')
+    .map(entry => {
+      const awards: SkillAward[] = Array.isArray(entry.awards) && entry.awards.every(award =>
+        !!award && typeof award.skill === 'string' && typeof award.xp === 'number'
+      ) && entry.awards.length > 0
+        ? entry.awards
+        : [{ skill: entry.skill, xp: entry.xp }];
+      return { ...entry, awards, bonusXp: typeof entry.bonusXp === 'number' && entry.bonusXp > 0 ? entry.bonusXp : undefined };
+    });
 }
 
 export async function saveEntries(entries: Entry[]): Promise<void> {
