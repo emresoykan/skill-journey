@@ -6,5 +6,13 @@ module.exports = defineConfig([
   expoConfig,
   {
     ignores: ["dist/*"],
-  }
+  },
+  {
+    // scripts/ altındaki yardımcılar uygulamada değil, Node ile çalışır.
+    files: ["scripts/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: { __dirname: "readonly", Buffer: "readonly", console: "readonly", process: "readonly" },
+    },
+  },
 ]);

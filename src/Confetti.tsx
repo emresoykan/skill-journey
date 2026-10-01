@@ -35,7 +35,7 @@ export function Confetti({ burstKey, count = 32 }: { burstKey: string | null; co
     const r = (k: number) => noise(base + i * 17 + k);
     return { x: r(1), size: 6 + r(2) * 6, strip: r(3) > 0.5, color: colors[Math.floor(r(4) * colors.length)], delay: r(5) * 350, duration: 1500 + r(6) * 1100, drift: (r(7) - 0.5) * 120, spin: (r(8) - 0.5) * 900, fall: 0.55 + r(9) * 0.4 };
   });
-  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+  return <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
     {seeds.map((seed, i) => <Piece key={`${burstKey}-${i}`} seed={seed} burstKey={burstKey} width={width} height={height} />)}
   </View>;
 }
