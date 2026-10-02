@@ -15,6 +15,12 @@ const rules = [
   { skill: 'Confidence', words: ['cesaret', 'kendime güvend', 'savun', 'çekinmed', 'confidence'], reason: 'Kendini ortaya koyma pratiği yaptın.' },
   { skill: 'Assertiveness', words: ['savun', 'hakkımı', 'sınır', 'hayır', 'assertive'], reason: 'Görüşünü veya sınırlarını ifade ettin.' },
   { skill: 'Negotiation', words: ['müzakere', 'pazarlık', 'uzlaş', 'ikna', 'negotiat'], reason: 'Ortak bir sonuca ulaşmak için görüşme yaptın.' },
+  // Gündelik işler: kısa "bugün yaptıklarım" kayıtları için.
+  { skill: 'Household', words: ['temizl', 'çamaşır', 'bulaşık', 'ütü', 'süpür', 'toparla', 'düzenle', 'tamir', 'bahçe', 'clean', 'laundry'], reason: 'Yaşadığın alanı düzene soktun.' },
+  { skill: 'Organization', words: ['fatura', 'öde', 'plan', 'liste', 'alışveriş', 'market', 'randevu', 'organize', 'takvim', 'hallett', 'ayarla', 'schedule'], reason: 'Hayatının bir parçasını planlayıp yoluna koydun.' },
+  { skill: 'Self Care', words: ['uyudu', 'uyku', 'dinlen', 'meditasyon', 'doktor', 'ilaç', 'yürü', 'nefes', 'sleep', 'rest'], reason: 'Kendine iyi bakmak için zaman ayırdın.' },
+  { skill: 'Productivity', words: ['bitir', 'tamamla', 'teslim', 'rapor', 'mail', 'posta', 'proje', 'görev', 'hazırla', 'gönder', 'finish', 'done'], reason: 'Bir işi ilerletip sonuca bağladın.' },
+  { skill: 'Relationships', words: ['aile', 'anne', 'baba', 'eşim', 'kardeş', 'ziyaret', 'sohbet', 'aradım', 'buluş', 'family', 'visit'], reason: 'Sevdiklerinle bağını güçlendirdin.' },
 ] as const;
 
 const skillNames: Record<string, string> = {
@@ -32,6 +38,11 @@ const skillNames: Record<string, string> = {
   Confidence: 'Özgüven',
   Assertiveness: 'Kendini Savunma',
   Negotiation: 'Müzakere',
+  Household: 'Ev Düzeni',
+  Organization: 'Planlama',
+  'Self Care': 'Öz Bakım',
+  Productivity: 'Üretkenlik',
+  Relationships: 'İlişkiler',
 };
 
 export const displaySkill = (skill: string) => skillNames[skill] ?? skill;

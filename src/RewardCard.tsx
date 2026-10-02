@@ -25,6 +25,20 @@ function PopIn({ index, children }: { index: number; children: ReactNode }) {
   return <Animated.View style={{ opacity: t, transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }, { scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }}>{children}</Animated.View>;
 }
 
+export function rewardPerks(reward: Reward): string[] {
+  return [
+    ...reward.newSkills.map(skill => `✦ Yeni beceri keşfedildi: ${displaySkill(skill)}`),
+    ...reward.leveledSkills.map(skill => `⬆️ ${displaySkill(skill)} seviye atladı`),
+    ...(reward.goalReached ? ['✅ Günlük hedef tamam! Bugün harika gidiyorsun.'] : []),
+    ...(reward.bonusXp ? [`🎯 Günün görevi tamamlandı: +${reward.bonusXp} bonus XP`] : []),
+    ...(reward.streakExtended && reward.streak > 0 ? [`🔥 Seri ${reward.streak} gün oldu!`] : []),
+    ...reward.newBadges.map(badge => `${badge.icon} Yeni rozet: ${badge.title}`),
+  ];
+}
+
+// Özel bir an yoksa küçük satır, varsa büyük kutlama kartı.
+export const isSpecialReward = (reward: Reward) => reward.leveledUp || rewardPerks(reward).length > 0;
+
 // Kayıt başına yeniden bağlanır (key={reward.id}); sayaç ve animasyonlar sıfırdan başlar.
 export function RewardCard({ reward }: { reward: Reward }) {
   const total = reward.analysis.xp + reward.bonusXp;
@@ -33,15 +47,17 @@ export function RewardCard({ reward }: { reward: Reward }) {
   useEffect(() => {
     Animated.spring(enter, { toValue: 1, friction: 5, tension: 70, useNativeDriver: useNative }).start();
   }, [enter]);
-  const perks = [
-    ...reward.newSkills.map(skill => `✦ Yeni beceri keşfedildi: ${displaySkill(skill)}`),
-    ...reward.leveledSkills.map(skill => `⬆️ ${displaySkill(skill)} seviye atladı`),
-    ...(reward.bonusXp ? [`🎯 Günün görevi tamamlandı: +${reward.bonusXp} bonus XP`] : []),
-    ...(reward.streakExtended && reward.streak > 0 ? [`🔥 Seri ${reward.streak} gün oldu!`] : []),
-    ...reward.newBadges.map(badge => `${badge.icon} Yeni rozet: ${badge.title}`),
-  ];
+  const perks = rewardPerks(reward);
+  const pop = { opacity: enter, transform: [{ scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] };
 
-  return <Animated.View style={[s.card, { opacity: enter, transform: [{ scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
+  if (!isSpecialReward(reward)) {
+    return <Animated.View style={[s.compact, pop]}>
+      <Text style={s.compactXp}>+{shown} XP</Text>
+      <Text style={s.compactSkills} numberOfLines={2}>{reward.analysis.awards.map(award => displaySkill(award.skill)).join(' · ')}</Text>
+    </Animated.View>;
+  }
+
+  return <Animated.View style={[s.card, pop]}>
     <Text style={s.eyebrow}>{reward.leveledUp ? `🎉 SEVİYE ${reward.newLevel}!` : '⚡ XP KAZANDIN'}</Text>
     <Text style={s.total}>+{shown} <Text style={s.totalUnit}>XP</Text></Text>
     <Text style={s.reason}>{reward.analysis.reason}</Text>
@@ -58,9 +74,12 @@ export function RewardCard({ reward }: { reward: Reward }) {
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: '#FFF7DF', borderColor: '#F3D990', borderWidth: 2, borderRadius: 24, padding: 20, marginBottom: 25 },
+  card: { backgroundColor: '#FFF7DF', borderColor: '#F3D990', borderWidth: 2, borderRadius: 20, padding: 18, marginTop: 14, marginBottom: 4 },
+  compact: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF7DF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, marginTop: 12 },
+  compactXp: { color: '#8B5B00', fontSize: 18, fontWeight: '800' },
+  compactSkills: { flex: 1, color: teal, fontSize: 13, fontWeight: '700' },
   eyebrow: { color: '#8B5B00', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
-  total: { color: '#182637', fontSize: 46, fontWeight: '800', letterSpacing: -1.5, marginTop: 4 },
+  total: { color: '#182637', fontSize: 40, fontWeight: '800', letterSpacing: -1.5, marginTop: 4 },
   totalUnit: { fontSize: 22, color: '#8B5B00' },
   reason: { color: '#657482', fontSize: 14, lineHeight: 21, marginBottom: 12 },
   awardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#F1E5C9' },

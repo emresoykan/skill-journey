@@ -3,6 +3,7 @@ import type { Entry } from './storage';
 
 export const LEVEL_XP = 100;
 export const QUEST_BONUS = 20;
+export const DAILY_GOAL = 3;
 export const level = (xp: number) => Math.floor(xp / LEVEL_XP) + 1;
 export const entryXp = (entry: Entry) => entry.xp + (entry.bonusXp ?? 0);
 export const totalXpOf = (entries: Entry[]) => entries.reduce((sum, entry) => sum + entryXp(entry), 0);
@@ -23,6 +24,30 @@ const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(),
 const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 const validDates = (entries: Entry[]) => entries.map(entry => new Date(entry.createdAt)).filter(date => Number.isFinite(date.getTime()));
 export const isToday = (iso: string, now = new Date()) => dayKey(new Date(iso)) === dayKey(now);
+export const todayEntries = (entries: Entry[], now = new Date()) => entries.filter(entry => isToday(entry.createdAt, now));
+
+export type DayGroup = { key: string; date: Date; entries: Entry[]; xp: number };
+// Kayıtları takvim gününe göre gruplar; en yeni gün başta.
+export function groupByDay(entries: Entry[]): DayGroup[] {
+  const groups = new Map<string, DayGroup>();
+  for (const entry of entries) {
+    const date = new Date(entry.createdAt);
+    if (!Number.isFinite(date.getTime())) continue;
+    const key = dayKey(date);
+    const group = groups.get(key) ?? { key, date: startOfDay(date), entries: [], xp: 0 };
+    group.entries.push(entry);
+    group.xp += entryXp(entry);
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+export function dayLabel(date: Date, now = new Date()): string {
+  const diff = Math.round((startOfDay(now).getTime() - startOfDay(date).getTime()) / 86_400_000);
+  if (diff === 0) return 'Bugün';
+  if (diff === 1) return 'Dün';
+  return new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
+}
 
 export type StreakDay = { key: string; label: string; active: boolean; today: boolean };
 export type Streak = { count: number; activeToday: boolean; week: StreakDay[] };
@@ -77,23 +102,26 @@ export function dailyQuest(now = new Date()): Quest {
 export const questDoneToday = (entries: Entry[], now = new Date()) =>
   entries.some(entry => (entry.bonusXp ?? 0) > 0 && isToday(entry.createdAt, now));
 
-type Stats = { entries: number; skills: number; level: number; streak: number; quests: number; combo: number; skillLevel: number };
+type Stats = { entries: number; skills: number; level: number; streak: number; quests: number; combo: number; skillLevel: number; goalDays: number };
 export type Badge = { id: string; icon: string; title: string; description: string; stat: keyof Stats; goal: number };
 export type BadgeProgress = Badge & { current: number; unlocked: boolean };
 
 export const badges: Badge[] = [
-  { id: 'first', icon: '✨', title: 'İlk Adım', description: 'İlk anını kaydet', stat: 'entries', goal: 1 },
+  { id: 'first', icon: '✨', title: 'İlk Adım', description: 'İlk kaydını ekle', stat: 'entries', goal: 1 },
   { id: 'streak3', icon: '🔥', title: 'Kıvılcım', description: '3 günlük seri yap', stat: 'streak', goal: 3 },
   { id: 'skills3', icon: '🧩', title: 'Çok Yönlü', description: '3 farklı beceri keşfet', stat: 'skills', goal: 3 },
   { id: 'combo', icon: '💥', title: 'Kombo', description: 'Tek anda 3 beceri kazan', stat: 'combo', goal: 3 },
   { id: 'quest1', icon: '🎯', title: 'Görev Avcısı', description: 'İlk günlük görevi tamamla', stat: 'quests', goal: 1 },
-  { id: 'entries5', icon: '📔', title: 'Günlükçü', description: '5 an kaydet', stat: 'entries', goal: 5 },
+  { id: 'goal1', icon: '✅', title: 'Tam Gün', description: `Bir günde ${DAILY_GOAL} şey kaydet`, stat: 'goalDays', goal: 1 },
+  { id: 'entries5', icon: '📔', title: 'Günlükçü', description: '5 şey kaydet', stat: 'entries', goal: 5 },
   { id: 'streak7', icon: '☄️', title: 'Alev Alev', description: '7 günlük seri yap', stat: 'streak', goal: 7 },
   { id: 'level5', icon: '⭐', title: 'Yükselen Yıldız', description: 'Seviye 5’e ulaş', stat: 'level', goal: 5 },
   { id: 'skillLevel3', icon: '🏆', title: 'Uzmanlık', description: 'Bir beceride seviye 3’e ulaş', stat: 'skillLevel', goal: 3 },
   { id: 'skills6', icon: '🌈', title: 'Rönesans', description: '6 farklı beceri keşfet', stat: 'skills', goal: 6 },
   { id: 'quests5', icon: '🏹', title: 'Görev Ustası', description: '5 günlük görev tamamla', stat: 'quests', goal: 5 },
-  { id: 'entries20', icon: '📚', title: 'Hikâye Anlatıcısı', description: '20 an kaydet', stat: 'entries', goal: 20 },
+  { id: 'goal7', icon: '🗓️', title: 'Disiplin', description: '7 gün hedefini tamamla', stat: 'goalDays', goal: 7 },
+  { id: 'entries20', icon: '📚', title: 'Hikâye Anlatıcısı', description: '20 şey kaydet', stat: 'entries', goal: 20 },
+  { id: 'entries50', icon: '🏛️', title: 'Arşivci', description: '50 şey kaydet', stat: 'entries', goal: 50 },
 ];
 
 function getStats(entries: Entry[]): Stats {
@@ -109,6 +137,7 @@ function getStats(entries: Entry[]): Stats {
     quests: entries.filter(entry => (entry.bonusXp ?? 0) > 0).length,
     combo: Math.max(0, ...entries.map(entry => entry.awards.length)),
     skillLevel: Math.max(0, ...Object.values(skillXp).map(level)),
+    goalDays: groupByDay(entries).filter(group => group.entries.length >= DAILY_GOAL).length,
   };
 }
 

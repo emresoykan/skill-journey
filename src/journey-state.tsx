@@ -2,10 +2,13 @@ import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 import { analyzeExperience, type Analysis } from './mockAnalysis';
 import { loadEntries, saveEntries, type Entry } from './storage';
 import { correctSkillAward } from './skillCorrections';
-import { dailyQuest, getStreak, level, newlyUnlocked, questDoneToday, totalXpOf, type Badge } from './game';
+import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
 import { rewardFeedback } from './feedback';
-export type Reward = { id: string; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean };
+export type Reward = { id: string; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean; goalReached: boolean };
 const normalizeDescription = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
+// Aynı şey farklı günlerde tekrar yazılabilir ("30 dk yürüdüm"); yalnızca aynı gün içinde tekrar engellenir.
+const isSameDayDuplicate = (entries: Entry[], description: string, day: string, exceptId?: string) =>
+  entries.some(entry => entry.id !== exceptId && isToday(entry.createdAt, new Date(day)) && normalizeDescription(entry.description) === normalizeDescription(description));
 function useJourneyState() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState('');
@@ -23,6 +26,7 @@ function useJourneyState() {
   const quest = dailyQuest();
   const questDone = questDoneToday(entries);
   const streak = getStreak(entries);
+  const today = todayEntries(entries);
   const skillTotals = Object.entries(entries.reduce<Record<string, number>>((totals, entry) => {
     for (const award of entry.awards) totals[award.skill] = (totals[award.skill] ?? 0) + award.xp;
     return totals;
@@ -34,9 +38,9 @@ function useJourneyState() {
 
   async function addMoment() {
     const description = draft.trim();
-    if (!description) { setError('Önce bugün yaşadığın bir şeyi yaz.'); return; }
-    if (entries.some(entry => normalizeDescription(entry.description) === normalizeDescription(description))) {
-      setError('Bu anı zaten kaydettin. Yeni bir deneyim yazabilirsin.');
+    if (!description) { setError('Önce bugün yaptığın bir şeyi yaz.'); return; }
+    if (isSameDayDuplicate(entries, description, new Date().toISOString())) {
+      setError('Bunu bugün zaten ekledin.');
       return;
     }
     if (busy) return;
@@ -65,12 +69,14 @@ function useJourneyState() {
         newBadges: newlyUnlocked(entries, updated),
         streak: getStreak(updated).count,
         streakExtended: !streak.activeToday,
+        goalReached: today.length < DAILY_GOAL && today.length + 1 >= DAILY_GOAL,
       };
       setEntries(updated);
       setReward(nextReward);
       if (nextReward.leveledUp) setLevelUpShown(newLevel);
       rewardFeedback(nextReward);
-      setDraft('');
+      // Analiz sırasında yeni bir şey yazılmaya başlandıysa onu silme.
+      setDraft(current => current.trim() === description ? '' : current);
     } catch { setError('Bu an kaydedilemedi. Lütfen tekrar dene.'); }
     finally { setBusy(false); }
   }
@@ -108,8 +114,9 @@ function useJourneyState() {
   async function saveEdit(id: string) {
     const description = editDraft.trim();
     if (!description) { setEditError('Kayıt boş olamaz.'); return; }
-    if (entries.some(entry => entry.id !== id && normalizeDescription(entry.description) === normalizeDescription(description))) {
-      setEditError('Bu anı başka bir kayıtta zaten var.');
+    const editing = entries.find(entry => entry.id === id);
+    if (editing && isSameDayDuplicate(entries, description, editing.createdAt, id)) {
+      setEditError('Aynı gün içinde bu kayıt zaten var.');
       return;
     }
     if (busy) return;
@@ -146,7 +153,7 @@ function useJourneyState() {
   }
 
 
-  return { entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {
