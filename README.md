@@ -23,3 +23,7 @@ Mock analiz gerçek yapay zekâ değildir. Anahtar sözcük eşleşmesi ve metin
 ## iOS sonraki adım
 
 Windows üzerinde iOS simülatörü ve yerel Xcode build'i çalışmaz. iOS paketi için ileride [EAS Build](https://docs.expo.dev/build/introduction/) gibi bir bulut build hizmeti veya fiziksel Mac gerekir. Bu MVP'de iOS build ya da yayınlama yapılandırılmadı.
+
+## Web yayını (GitHub Pages)
+
+`main` dalına her gönderimde `.github/workflows/pages.yml` web sürümünü derleyip `https://emresoykan.github.io/skill-journey/` adresine yayınlar. İlk kez: repo **Settings → Pages → Source: GitHub Actions**. Alt yol (`/skill-journey`) yalnız bu derlemede `EXPO_BASE_URL` ile verilir (`app.config.js`); `npm run web` etkilenmez.
