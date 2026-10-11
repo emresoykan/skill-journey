@@ -25,3 +25,13 @@ Eşleşme kuralları `tests/analysis.test.mjs` içindeki örnek cümlelerle sın
 ## iOS sonraki adım
 
 Windows üzerinde iOS simülatörü ve yerel Xcode build'i çalışmaz. iOS paketi için ileride [EAS Build](https://docs.expo.dev/build/introduction/) gibi bir bulut build hizmeti veya fiziksel Mac gerekir. Bu MVP'de iOS build ya da yayınlama yapılandırılmadı.
+
+## Web yayını (Cloudflare Pages)
+
+Repo gizli kalır; Cloudflare Pages projesi GitHub'a bağlıdır ve `main`'e her gönderimde web sürümünü derleyip yayınlar. Proje ayarları:
+
+- Build command: `npx expo export --platform web`
+- Build output directory: `dist`
+- Production branch: `main`
+
+Node sürümü `.node-version` dosyasından okunur. Kayıtlar yalnız kullanıcının kendi tarayıcısında (AsyncStorage → localStorage) saklanır; cihazlar arasında senkronize olmaz.
