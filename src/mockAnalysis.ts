@@ -2,7 +2,7 @@ export type SkillAward = { skill: string; xp: number };
 export type Analysis = { skill: string; xp: number; reason: string; awards: SkillAward[] };
 
 const rules = [
-  { skill: 'Communication', words: ['talk', 'spoke', 'explain', 'present', 'listen', 'message', 'konuş', 'anlat', 'sunum', 'dinle', 'paylaş', 'toplant'], reason: 'Düşüncelerini ifade ettin veya birini dinledin.' },
+  { skill: 'Communication', words: ['talk', 'spoke', 'explain', 'present', 'listen', 'message', 'mesaj', 'konuş', 'anlat', 'sunum', 'dinle', 'paylaş', 'toplant'], reason: 'Düşüncelerini ifade ettin veya birini dinledin.' },
   { skill: 'Problem Solving', words: ['solve', 'fix', 'debug', 'issue', 'problem', 'tricky', 'çöz', 'hata', 'sorun', 'düzelt'], reason: 'Bir sorunu ele alıp çözüm için adım attın.' },
   { skill: 'Collaboration', words: ['team', 'help', 'together', 'support', 'friend', 'colleague', 'ekip', 'yardım', 'birlikte', 'arkadaş', 'destek'], reason: 'Birine destek oldun veya birlikte ilerledin.' },
   { skill: 'Learning', words: ['learn', 'study', 'read', 'practice', 'course', 'new', 'öğren', 'çalış', 'oku', 'pratik', 'yeni', 'araştır'], reason: 'Yeni bir şey öğrenmeye veya anlamaya zaman ayırdın.' },
@@ -10,7 +10,7 @@ const rules = [
   { skill: 'Resilience', words: ['hard', 'difficult', 'failed', 'again', 'try', 'challenge', 'zor', 'tekrar', 'dene', 'başarısız', 'vazgeç'], reason: 'Zorluk karşısında çabalamaya devam ettin.' },
   { skill: 'Finance', words: ['finans', 'borsa', 'dolar', 'sermaye', 'yatırım', 'bilanço', 'karlılık', 'kârlılık', 'hisse', 'budget', 'finance'], reason: 'Finansla ilgili bir konuya zaman ayırdın.' },
   { skill: 'Cooking', words: ['makarna', 'yemek', 'pişir', 'tarif', 'mutfak', 'cook', 'recipe'], reason: 'Yemek yapma konusunda deneyim kazandın.' },
-  { skill: 'Fitness', words: ['spor', 'koş', 'antrenman', 'egzersiz', 'yüz', 'fitness', 'workout', 'run'], reason: 'Fiziksel gelişimin için harekete geçtin.' },
+  { skill: 'Fitness', words: ['spor', 'koş', 'antrenman', 'egzersiz', 'yüzme', 'yüzdü', 'fitness', 'workout', 'run'], reason: 'Fiziksel gelişimin için harekete geçtin.' },
   { skill: 'Parenting', words: ['çocuğ', 'çocuk', 'ebeveyn', 'oğlum', 'kızım', 'parent', 'child'], reason: 'Ailenle ilgili bir deneyim yaşadın.' },
   { skill: 'Confidence', words: ['cesaret', 'kendime güvend', 'savun', 'çekinmed', 'confidence'], reason: 'Kendini ortaya koyma pratiği yaptın.' },
   { skill: 'Assertiveness', words: ['savun', 'hakkımı', 'sınır', 'hayır', 'assertive'], reason: 'Görüşünü veya sınırlarını ifade ettin.' },
@@ -22,6 +22,35 @@ const rules = [
   { skill: 'Productivity', words: ['bitir', 'tamamla', 'teslim', 'rapor', 'mail', 'posta', 'proje', 'görev', 'hazırla', 'gönder', 'finish', 'done'], reason: 'Bir işi ilerletip sonuca bağladın.' },
   { skill: 'Relationships', words: ['aile', 'anne', 'baba', 'eşim', 'kardeş', 'ziyaret', 'sohbet', 'aradım', 'buluş', 'family', 'visit'], reason: 'Sevdiklerinle bağını güçlendirdin.' },
 ] as const;
+
+// Kısa kökler alakasız kelimelere takılmasın: kök → bu öneklerle başlayan kelimeler o kök için sayılmaz.
+const falseFriends: Record<string, readonly string[]> = {
+  dinle: ['dinlen'],
+  read: ['ready'],
+  oku: ['okul'],
+  yeni: ['yeniden'],
+  ekip: ['ekipman'],
+  tasar: ['tasarruf'],
+  yaz: ['yazın', 'yazlık', 'yazık'],
+  üret: ['üretim', 'üretici'],
+  dene: ['deneyim', 'denet'],
+  zor: ['zorunlu'],
+  hisse: ['hisset'],
+  tarif: ['tarife'],
+  koş: ['koşul'],
+  sınır: ['sınırlı'],
+  hayır: ['hayırlı', 'hayırsever'],
+  düzenle: ['düzenleyici', 'düzenleme'],
+  öde: ['ödev', 'ödenek'],
+  yürü: ['yürürl', 'yürüt'],
+  rest: ['resta', 'resto'],
+};
+
+// Boşluk içeren kökler ("kendime güvend") kelime sınırından başlayan ifade olarak aranır.
+const matchesStem = (stem: string, words: string[], text: string) =>
+  stem.includes(' ')
+    ? text.includes(` ${stem}`)
+    : words.some(word => word.startsWith(stem) && !falseFriends[stem]?.some(prefix => word.startsWith(prefix)));
 
 const skillNames: Record<string, string> = {
   Communication: 'İletişim',
@@ -51,11 +80,17 @@ export const availableSkills = [...rules.map(rule => rule.skill), 'Self Awarenes
 export async function analyzeExperience(description: string): Promise<Analysis> {
   // Yerel örnek analiz: ağ bağlantısı ve API anahtarı gerekmez.
   await new Promise(resolve => setTimeout(resolve, 450));
+  return scoreExperience(description);
+}
+
+// Bekleme olmadan çalışan saf eşleştirme; testler bunu doğrudan kullanır.
+export function scoreExperience(description: string): Analysis {
   const words = description.toLocaleLowerCase('tr-TR').match(/[\p{L}\p{N}]+/gu) ?? [];
+  const text = ` ${words.join(' ')}`;
   const ranked = rules.map((rule, index) => ({
     rule,
     index,
-    matches: rule.words.filter(stem => words.some(word => word.startsWith(stem))).length,
+    matches: rule.words.filter(stem => matchesStem(stem, words, text)).length,
   })).sort((a, b) => b.matches - a.matches || a.index - b.index);
   const matched = ranked.filter(item => item.matches > 0).slice(0, 3);
   const awards: SkillAward[] = matched.length
