@@ -15,7 +15,11 @@ const touchIcon = Platform.OS === 'web' ? (require('../../assets/apple-touch-ico
 export default function Layout() {
   useEffect(prepareSounds, []);
   return <JourneyProvider>
-    {Platform.OS === 'web' ? <Head><link rel="apple-touch-icon" href={touchIcon} /></Head> : null}
+    {Platform.OS === 'web' ? <Head>
+      <title>Skill Journey</title>
+      <meta name="apple-mobile-web-app-title" content="Skill Journey" />
+      <link rel="apple-touch-icon" href={touchIcon} />
+    </Head> : null}
     <Tabs initialRouteName="index" screenListeners={{ tabPress: tap }} screenOptions={{
       headerStyle: { backgroundColor: '#F7F8F4' },
       headerTintColor: '#182637',
