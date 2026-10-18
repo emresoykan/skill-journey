@@ -1,19 +1,27 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 import { displaySkill } from './mockAnalysis';
 import type { Reward } from './journey-state';
 
 const useNative = Platform.OS !== 'web';
 const teal = '#166B65';
 
-function useCountUp(target: number) {
+// Süreye göre sayar: kare atlanırsa bir sonraki kare doğru değere zıplar. Sayaç her
+// durumda hedefte biter; animasyon yarıda kesilse bile ekranda yanlış sayı kalmaz.
+function useCountUp(target: number, duration = 700, delay = 150) {
   const [value, setValue] = useState(0);
   useEffect(() => {
-    const counter = new Animated.Value(0);
-    const id = counter.addListener(({ value: v }) => setValue(Math.round(v)));
-    Animated.timing(counter, { toValue: target, duration: 1000, delay: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-    return () => { counter.removeListener(id); counter.stopAnimation(); };
-  }, [target]);
+    let frame = 0;
+    const start = Date.now() + delay;
+    const step = () => {
+      const t = Math.min(1, Math.max(0, (Date.now() - start) / duration));
+      setValue(Math.round(target * (1 - Math.pow(1 - t, 3))));
+      if (t < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    const settle = setTimeout(() => setValue(target), delay + duration + 50);
+    return () => { cancelAnimationFrame(frame); clearTimeout(settle); };
+  }, [target, duration, delay]);
   return value;
 }
 
@@ -53,7 +61,7 @@ export function RewardCard({ reward }: { reward: Reward }) {
   if (!isSpecialReward(reward)) {
     return <Animated.View style={[s.compact, pop]}>
       <Text style={s.compactXp}>+{shown} XP</Text>
-      <Text style={s.compactSkills} numberOfLines={2}>{reward.analysis.awards.map(award => displaySkill(award.skill)).join(' · ')}</Text>
+      <Text style={s.compactSkills} numberOfLines={2}>{reward.analysis.awards.map(award => `${displaySkill(award.skill)} +${award.xp}`).join(' · ')}</Text>
     </Animated.View>;
   }
 

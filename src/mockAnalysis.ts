@@ -7,11 +7,13 @@ const rules = [
   { skill: 'Collaboration', words: ['team', 'help', 'together', 'support', 'friend', 'colleague', 'ekip', 'yardım', 'birlikte', 'arkadaş', 'destek'], reason: 'Birine destek oldun veya birlikte ilerledin.' },
   { skill: 'Learning', words: ['learn', 'study', 'read', 'practice', 'course', 'new', 'öğren', 'çalış', 'oku', 'pratik', 'yeni', 'araştır'], reason: 'Yeni bir şey öğrenmeye veya anlamaya zaman ayırdın.' },
   { skill: 'Creativity', words: ['create', 'write', 'design', 'draw', 'make', 'yarat', 'tasar', 'çiz', 'yaz', 'üret'], reason: 'Bir fikri geliştirdin veya ortaya yeni bir şey koydun.' },
-  { skill: 'Resilience', words: ['hard', 'difficult', 'failed', 'again', 'try', 'challenge', 'zor', 'tekrar', 'dene', 'başarısız', 'vazgeç'], reason: 'Zorluk karşısında çabalamaya devam ettin.' },
-  { skill: 'Finance', words: ['finans', 'borsa', 'dolar', 'sermaye', 'yatırım', 'bilanço', 'karlılık', 'kârlılık', 'hisse', 'budget', 'finance'], reason: 'Finansla ilgili bir konuya zaman ayırdın.' },
-  { skill: 'Cooking', words: ['makarna', 'yemek', 'pişir', 'tarif', 'mutfak', 'cook', 'recipe'], reason: 'Yemek yapma konusunda deneyim kazandın.' },
-  { skill: 'Fitness', words: ['spor', 'koş', 'antrenman', 'egzersiz', 'yüzme', 'yüzdü', 'fitness', 'workout', 'run'], reason: 'Fiziksel gelişimin için harekete geçtin.' },
-  { skill: 'Parenting', words: ['çocuğ', 'çocuk', 'ebeveyn', 'oğlum', 'kızım', 'parent', 'child'], reason: 'Ailenle ilgili bir deneyim yaşadın.' },
+  // "denedim" tek başına yeni bir şeyi denemektir; azim ancak "tekrar", "zor", "vazgeçmedim" gibi sözcüklerle anlaşılır.
+  { skill: 'Resilience', words: ['hard', 'difficult', 'failed', 'again', 'challenge', 'zor', 'tekrar', 'başarısız', 'vazgeç'], reason: 'Zorluk karşısında çabalamaya devam ettin.' },
+  { skill: 'Finance', specific: true, words: ['finans', 'borsa', 'dolar', 'sermaye', 'yatırım', 'bilanço', 'karlılık', 'kârlılık', 'hisse', 'budget', 'finance'], reason: 'Finansla ilgili bir konuya zaman ayırdın.' },
+  { skill: 'Cooking', specific: true, words: ['makarna', 'yemek', 'pişir', 'tarif', 'mutfak', 'cook', 'recipe'], reason: 'Yemek yapma konusunda deneyim kazandın.' },
+  { skill: 'Fitness', specific: true, words: ['spor', 'koş', 'antrenman', 'egzersiz', 'yüzme', 'yüzdü', 'yürü', 'bisiklet', 'fitness', 'workout', 'run'], reason: 'Fiziksel gelişimin için harekete geçtin.' },
+  { skill: 'Music', specific: true, words: ['müzik', 'gitar', 'piyano', 'keman', 'bateri', 'davul', 'enstrüman', 'şarkı', 'nota', 'beste', 'konser', 'music', 'guitar', 'piano', 'sing'], reason: 'Müzikle uğraşarak kendini geliştirdin.' },
+  { skill: 'Parenting', specific: true, words: ['çocuğ', 'çocuk', 'ebeveyn', 'oğlum', 'kızım', 'parent', 'child'], reason: 'Ailenle ilgili bir deneyim yaşadın.' },
   { skill: 'Confidence', words: ['cesaret', 'kendime güvend', 'savun', 'çekinmed', 'confidence'], reason: 'Kendini ortaya koyma pratiği yaptın.' },
   { skill: 'Assertiveness', words: ['savun', 'hakkımı', 'sınır', 'hayır', 'assertive'], reason: 'Görüşünü veya sınırlarını ifade ettin.' },
   { skill: 'Negotiation', words: ['müzakere', 'pazarlık', 'uzlaş', 'ikna', 'negotiat'], reason: 'Ortak bir sonuca ulaşmak için görüşme yaptın.' },
@@ -21,7 +23,7 @@ const rules = [
   { skill: 'Self Care', words: ['uyudu', 'uyku', 'dinlen', 'meditasyon', 'doktor', 'ilaç', 'yürü', 'nefes', 'sleep', 'rest'], reason: 'Kendine iyi bakmak için zaman ayırdın.' },
   { skill: 'Productivity', words: ['bitir', 'tamamla', 'teslim', 'rapor', 'mail', 'posta', 'proje', 'görev', 'hazırla', 'gönder', 'finish', 'done'], reason: 'Bir işi ilerletip sonuca bağladın.' },
   { skill: 'Relationships', words: ['aile', 'anne', 'baba', 'eşim', 'kardeş', 'ziyaret', 'sohbet', 'aradım', 'buluş', 'family', 'visit'], reason: 'Sevdiklerinle bağını güçlendirdin.' },
-] as const;
+] as const satisfies readonly { skill: string; words: readonly string[]; reason: string; specific?: boolean }[];
 
 // Kısa kökler alakasız kelimelere takılmasın: kök → bu öneklerle başlayan kelimeler o kök için sayılmaz.
 const falseFriends: Record<string, readonly string[]> = {
@@ -44,6 +46,7 @@ const falseFriends: Record<string, readonly string[]> = {
   öde: ['ödev', 'ödenek'],
   yürü: ['yürürl', 'yürüt'],
   rest: ['resta', 'resto'],
+  sing: ['singl', 'singap'],
 };
 
 // Boşluk içeren kökler ("kendime güvend") kelime sınırından başlayan ifade olarak aranır.
@@ -63,6 +66,7 @@ const skillNames: Record<string, string> = {
   Finance: 'Finans',
   Cooking: 'Yemek Yapma',
   Fitness: 'Fitness',
+  Music: 'Müzik',
   Parenting: 'Ebeveynlik',
   Confidence: 'Özgüven',
   Assertiveness: 'Kendini Savunma',
@@ -90,8 +94,10 @@ export function scoreExperience(description: string): Analysis {
   const ranked = rules.map((rule, index) => ({
     rule,
     index,
+    specific: 'specific' in rule && rule.specific ? 1 : 0,
     matches: rule.words.filter(stem => matchesStem(stem, words, text)).length,
-  })).sort((a, b) => b.matches - a.matches || a.index - b.index);
+  // Eşitlikte belirli bir alan (Müzik, Yemek Yapma...) genel beceriden (Öğrenme...) önce gelir.
+  })).sort((a, b) => b.matches - a.matches || b.specific - a.specific || a.index - b.index);
   const matched = ranked.filter(item => item.matches > 0).slice(0, 3);
   const awards: SkillAward[] = matched.length
     ? matched.map(item => ({

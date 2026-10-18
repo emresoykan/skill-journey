@@ -34,6 +34,10 @@ const cases = [
   ['Aylık raporu bitirip teslim ettim', ['Productivity'], []],
   ['Annemi aradım', ['Relationships'], []],
   ['Bugün sadece düşündüm', ['Self Awareness'], []],
+  ['Akşam yürüyüş yaptım', ['Fitness'], []],
+  ['Gitar çalıştım', ['Music', 'Learning'], []],
+  ['Piyano dersine gittim', ['Music'], []],
+  ['Bisiklete bindim', ['Fitness'], []],
 
   // Yanlış eşleşmeler: kısa kökler alakasız kelimelere takılmamalı.
   ['Brüt marjı yüzde 5 artırdım', [], ['Fitness']],
@@ -59,6 +63,9 @@ const cases = [
   ['Restoranda akşam yemeği', [], ['Self Care']],
   ['Sınırlı bütçeyle tatil planladım', ['Organization'], ['Assertiveness']],
   ['Hayırlı olsun mesajı attım', ['Communication'], ['Assertiveness']],
+  ['Yeni bir tarif denedim', ['Cooking'], ['Resilience']],
+  ['Yeni bir kafe denedim', [], ['Resilience']],
+  ['Single origin kahve aldım', [], ['Music']],
 ];
 
 for (const [text, expected, forbidden] of cases) {
@@ -67,6 +74,15 @@ for (const [text, expected, forbidden] of cases) {
     for (const skill of expected) assert.ok(skills.includes(skill), `${skill} bekleniyordu, gelen: ${skills.join(', ')}`);
     for (const skill of forbidden) assert.ok(!skills.includes(skill), `${skill} gelmemeliydi, gelen: ${skills.join(', ')}`);
   });
+}
+
+// Birincil beceri: kartta ve zaman çizelgesinde görünen ilk beceri.
+for (const [text, primary] of [
+  ['Akşam yürüyüş yaptım', 'Fitness'],
+  ['Yeni bir tarif denedim', 'Cooking'],
+  ['Gitar çalıştım', 'Music'],
+]) {
+  test(`birincil beceri: ${text} → ${primary}`, () => assert.equal(scoreExperience(text).skill, primary));
 }
 
 test('en fazla üç beceri ve pozitif XP döner', () => {
