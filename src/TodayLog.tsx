@@ -26,7 +26,7 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
 
   return <View style={s.card}>
     <View style={s.head}>
-      <Text style={s.title}>Bugün ne yaptın?</Text>
+      <Text style={s.title}>Bugün ne yaptın, ne yaşadın?</Text>
       <Text style={[s.goal, today.length >= DAILY_GOAL && s.goalDone]}>{today.length >= DAILY_GOAL ? '✅ Hedef tamam' : `${done}/${DAILY_GOAL} hedef`}</Text>
     </View>
     <View style={s.segments}>
@@ -34,8 +34,8 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
     </View>
     <View style={s.inputRow}>
       <TextInput
-        accessibilityLabel="Bugün ne yaptın?"
-        placeholder="örn. Raporu bitirdim, 30 dk yürüdüm"
+        accessibilityLabel="Bugün ne yaptın, ne yaşadın?"
+        placeholder="örn. İlk kez sunum yaptım"
         placeholderTextColor="#9AA6A8"
         maxLength={200}
         returnKeyType="done"
@@ -51,7 +51,7 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
     </View>
     {error ? <Text style={s.error}>{error}</Text> : null}
     {children}
-    {today.length === 0 ? <Text style={s.empty}>Henüz bir şey yok. Küçük ya da büyük, yaptığın ilk şeyi ekle.</Text> : <>
+    {today.length === 0 ? <Text style={s.empty}>Henüz bir şey yok. Küçük ya da büyük, yaptığın ya da yaşadığın ilk şeyi ekle.</Text> : <>
       {today.map(entry => <View key={entry.id} style={s.item}>
         <Text style={s.check}>✓</Text>
         <View style={{ flex: 1 }}>
@@ -68,8 +68,8 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
 const s = StyleSheet.create({
   card: { backgroundColor: 'white', borderColor: '#E2E9E4', borderWidth: 1, borderRadius: 22, padding: 18, marginBottom: 18 },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { color: '#182637', fontSize: 20, fontWeight: '800' },
-  goal: { color: '#8B5B00', backgroundColor: '#FFF0C2', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12, fontWeight: '800', overflow: 'hidden' },
+  title: { flexShrink: 1, marginRight: 10, color: '#182637', fontSize: 20, fontWeight: '800' },
+  goal: { flexShrink: 0, color: '#8B5B00', backgroundColor: '#FFF0C2', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12, fontWeight: '800', overflow: 'hidden' },
   goalDone: { color: teal, backgroundColor: '#DDF1E9' },
   segments: { flexDirection: 'row', gap: 6, marginTop: 12, marginBottom: 14 },
   segment: { flex: 1, height: 7, borderRadius: 4, backgroundColor: '#E2E9E4' },
