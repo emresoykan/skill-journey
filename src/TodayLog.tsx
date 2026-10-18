@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DAILY_GOAL, entryXp } from './game';
 import { displaySkill } from './mockAnalysis';
+import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
+import { useJourney } from './journey-state';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
@@ -23,6 +25,9 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
   const done = Math.min(today.length, DAILY_GOAL);
   const skills = new Set(today.flatMap(entry => entry.awards.map(award => award.skill)));
   const xp = today.reduce((sum, entry) => sum + entryXp(entry), 0);
+  const { editingId } = useJourney();
+  // Bir kayda dokununca Düzenle/Sil açılır; aynı kayda tekrar dokununca kapanır.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   return <View style={s.card}>
     <View style={s.head}>
@@ -52,13 +57,20 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
     {error ? <Text style={s.error}>{error}</Text> : null}
     {children}
     {today.length === 0 ? <Text style={s.empty}>Henüz bir şey yok. Küçük ya da büyük, yaptığın ya da yaşadığın ilk şeyi ekle.</Text> : <>
-      {today.map(entry => <View key={entry.id} style={s.item}>
-        <Text style={s.check}>✓</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={s.itemText} numberOfLines={2}>{entry.description}</Text>
-          <Text style={s.itemSkills}>{entry.awards.map(award => displaySkill(award.skill)).join(' · ')}{entry.bonusXp ? ' · 🎯 Görev' : ''}</Text>
-        </View>
-        <Text style={s.itemXp}>+{entryXp(entry)}</Text>
+      {today.map(entry => <View key={entry.id} style={s.itemWrap}>
+        {editingId === entry.id ? <EntryEditForm entry={entry} /> : <>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Kayıt seçenekleri: ${entry.description}`} accessibilityState={{ expanded: openId === entry.id }} onPress={() => setOpenId(openId === entry.id ? null : entry.id)} style={s.item}>
+            <Text style={s.check}>✓</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.itemText} numberOfLines={openId === entry.id ? undefined : 2}>{entry.description}</Text>
+              <Text style={s.itemSkills}>{entry.awards.map(award => displaySkill(award.skill)).join(' · ')}{entry.bonusXp ? ' · 🎯 Görev' : ''}</Text>
+            </View>
+            <Text style={s.itemXp}>+{entryXp(entry)}</Text>
+          </Pressable>
+          {openId === entry.id ? <View style={s.itemActions}><EntryActionButtons entry={entry} /></View> : null}
+          <EntryDeleteConfirm entry={entry} />
+          <EntryEditNotice entry={entry} />
+        </>}
       </View>)}
       <Text style={s.summary}>Bugün {today.length} şey · {skills.size} beceri · +{xp} XP</Text>
     </>}
@@ -80,7 +92,9 @@ const s = StyleSheet.create({
   addText: { color: 'white', fontSize: 28, fontWeight: '700', marginTop: -2 },
   error: { color: '#B34242', fontSize: 12, marginTop: 8 },
   empty: { color: '#657482', fontSize: 13, lineHeight: 19, marginTop: 16 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#EEF2EE' },
+  itemWrap: { paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#EEF2EE' },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
+  itemActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: -4 },
   check: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#DDF1E9', color: teal, textAlign: 'center', lineHeight: 26, fontSize: 14, fontWeight: '800', overflow: 'hidden' },
   itemText: { color: '#182637', fontSize: 14, fontWeight: '600', lineHeight: 19 },
   itemSkills: { color: teal, fontSize: 11, marginTop: 2 },

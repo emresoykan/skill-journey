@@ -1,7 +1,7 @@
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
-import { analyzeExperience, type Analysis } from './mockAnalysis';
+import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
 import { loadEntries, saveEntries, type Entry } from './storage';
-import { correctSkillAward } from './skillCorrections';
+import { capAwards, correctSkillAward } from './skillCorrections';
 import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
 import { rewardFeedback } from './feedback';
 export type Reward = { id: string; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean; goalReached: boolean };
@@ -15,6 +15,8 @@ function useJourneyState() {
   const [reward, setReward] = useState<Reward | null>(null);
   const [levelUpShown, setLevelUpShown] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [editNotice, setEditNotice] = useState<{ id: string; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [timelineError, setTimelineError] = useState('');
@@ -45,7 +47,11 @@ function useJourneyState() {
     }
     if (busy) return;
     setBusy(true);
+    setAnalyzing(true);
     setError('');
+    // Önceki kaydın kartı yeni analiz sürerken ekranda kalmasın.
+    setReward(null);
+    setEditNotice(null);
     try {
       const result = await analyzeExperience(description);
       const knownSkills = new Set(entries.flatMap(entry => entry.awards.map(award => award.skill)));
@@ -78,7 +84,7 @@ function useJourneyState() {
       // Analiz sırasında yeni bir şey yazılmaya başlandıysa onu silme.
       setDraft(current => current.trim() === description ? '' : current);
     } catch { setError('Bu an kaydedilemedi. Lütfen tekrar dene.'); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setAnalyzing(false); }
   }
 
   async function deleteMoment(id: string) {
@@ -90,6 +96,7 @@ function useJourneyState() {
       await saveEntries(updated);
       setEntries(updated);
       setReward(null);
+      setEditNotice(null);
       setConfirmDeleteId(null);
     } catch {
       setTimelineError('Kayıt silinemedi. Lütfen tekrar dene.');
@@ -102,6 +109,7 @@ function useJourneyState() {
     setEditingId(entry.id);
     setEditDraft(entry.description);
     setEditError('');
+    setEditNotice(null);
     setConfirmDeleteId(null);
   }
 
@@ -124,11 +132,20 @@ function useJourneyState() {
     setEditError('');
     try {
       const result = await analyzeExperience(description);
-      const updated = entries.map(entry => entry.id === id ? { ...entry, description, ...result } : entry);
+      const before = entries.find(entry => entry.id === id);
+      const previousXp = before?.xp ?? result.xp;
+      const awards = capAwards(result.awards, previousXp);
+      const xp = awards.reduce((sum, award) => sum + award.xp, 0);
+      const updated = entries.map(entry => entry.id === id ? { ...entry, description, ...result, skill: awards[0].skill, awards, xp } : entry);
       await saveEntries(updated);
       setEntries(updated);
       setReward(null);
       cancelEditing();
+      const skills = awards.map(award => displaySkill(award.skill)).join(' · ');
+      const xpNote = xp < previousXp ? `XP ${previousXp} → ${xp}.`
+        : result.xp > previousXp ? `XP ${previousXp} olarak kaldı; düzenleme XP artırmaz.`
+        : `XP değişmedi (${xp}).`;
+      setEditNotice({ id, text: `Güncellendi: ${skills}. ${xpNote}` });
     } catch {
       setEditError('Değişiklikler kaydedilemedi. Lütfen tekrar dene.');
     } finally {
@@ -153,7 +170,7 @@ function useJourneyState() {
   }
 
 
-  return { entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {

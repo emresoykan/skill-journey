@@ -12,11 +12,12 @@ import { DailyQuest } from './DailyQuest';
 import { RewardCard, isSpecialReward } from './RewardCard';
 import { TodayLog } from './TodayLog';
 import { Badges } from './Badges';
+import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { Confetti } from './Confetti';
 import { setSoundEnabled, useSoundEnabled } from './sounds';
 const teal = '#166B65';
 export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memories' }) {
-  const { entries,draft,setDraft,reward,quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward } = useJourney();
+  const { analyzing,entries,draft,setDraft,reward,quest,questDone,streak,today,busy,loading,error,setError,timelineError,editingId,totalXp,skillTotals,addMoment,correctAward } = useJourney();
   const soundOn = useSoundEnabled();
   const [query, setQuery] = useState('');
   const terms = query.trim().toLocaleLowerCase('tr-TR').split(/\s+/).filter(Boolean);
@@ -40,7 +41,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         {section === 'today' ? <>
         <PlayerCard totalXp={totalXp} streak={streak} />
         <TodayLog today={today} draft={draft} error={error} busy={busy} disabled={loading} onChangeDraft={v => { setDraft(v); setError(''); }} onAdd={addMoment}>
-          {reward ? <RewardCard key={reward.id} reward={reward} /> : null}
+          {reward ? <RewardCard key={reward.id} reward={reward} /> : analyzing ? <Text style={s.analyzing}>✦ Becerilerin hesaplanıyor…</Text> : null}
         </TodayLog>
         {!loading ? <DailyQuest quest={quest} done={questDone} /> : null}
         </> : null}
@@ -71,52 +72,16 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
                 <Text style={s.label}>{displaySkill(entry.skill)}</Text>
                 <Text style={s.muted}>{new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(new Date(entry.createdAt))}</Text>
               </View>
-              {editingId === entry.id ? (
-                <View>
-                  <TextInput
-                    accessibilityLabel="Kaydı düzenle"
-                    multiline
-                    maxLength={1000}
-                    style={[s.input, s.editInput]}
-                    textAlignVertical="top"
-                    value={editDraft}
-                    onChangeText={value => { setEditDraft(value); setEditError(''); }}
-                  />
-                  <Text style={s.muted}>{editDraft.length}/1000</Text>
-                  {editError ? <Text style={s.error}>{editError}</Text> : null}
-                  <View style={s.confirmActions}>
-                    <Pressable accessibilityRole="button" disabled={busy} onPress={cancelEditing}>
-                      <Text style={s.cancelText}>Vazgeç</Text>
-                    </Pressable>
-                    <Pressable accessibilityRole="button" disabled={busy} onPress={() => saveEdit(entry.id)}>
-                      <Text style={s.saveText}>Kaydet</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
+              {editingId === entry.id ? <EntryEditForm entry={entry} /> : (
                 <View>
                   <Text style={s.description}>{entry.description}</Text>
                   <Text style={s.awardSummary}>{entry.awards.map(award => `${displaySkill(award.skill)} +${award.xp}`).join(' · ')}{entry.bonusXp ? ` · 🎯 Görev +${entry.bonusXp}` : ''}</Text>
                   <View style={s.entryFoot}>
                     <Text style={s.timelineXp}>+{entryXp(entry)} XP</Text>
-                    <View style={s.entryActions}>
-                      <Pressable accessibilityRole="button" accessibilityLabel={`Kaydı düzenle: ${entry.description}`} disabled={busy} onPress={() => startEditing(entry)}>
-                        <Text style={s.editText}>Düzenle</Text>
-                      </Pressable>
-                      <Pressable accessibilityRole="button" accessibilityLabel={`Kaydı sil: ${entry.description}`} disabled={busy} onPress={() => setConfirmDeleteId(entry.id)}>
-                        <Text style={s.deleteText}>Sil</Text>
-                      </Pressable>
-                    </View>
+                    <EntryActionButtons entry={entry} />
                   </View>
-                  {confirmDeleteId === entry.id ? (
-                    <View style={s.confirmBox}>
-                      <Text style={s.confirmText}>Bu kaydı silmek istiyor musun? Kazanılan {entryXp(entry)} XP de düşecek.</Text>
-                      <View style={s.confirmActions}>
-                        <Pressable accessibilityRole="button" onPress={() => setConfirmDeleteId(null)}><Text style={s.cancelText}>Vazgeç</Text></Pressable>
-                        <Pressable accessibilityRole="button" disabled={busy} onPress={() => deleteMoment(entry.id)}><Text style={s.deleteText}>Evet, sil</Text></Pressable>
-                      </View>
-                    </View>
-                  ) : null}
+                  <EntryDeleteConfirm entry={entry} />
+                  <EntryEditNotice entry={entry} />
                 </View>
               )}
             </View>
@@ -148,4 +113,5 @@ const s = StyleSheet.create({
   skillTrack: { height: 7, borderRadius: 7, backgroundColor: '#DDECE5', overflow: 'hidden', marginTop: 9, marginBottom: 6 },
   skillFill: { height: 7, backgroundColor: teal },
   awardSummary: { color: teal, fontSize: 11, lineHeight: 17, marginTop: 9 },
+  analyzing: { color: '#8B5B00', backgroundColor: '#FFF7DF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginTop: 12, fontSize: 13, fontWeight: '700', overflow: 'hidden' },
 });
