@@ -1,14 +1,21 @@
 import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import Head from 'expo-router/head';
+import { Platform, Text } from 'react-native';
 import { JourneyProvider } from '../journey-state';
 import { LevelUpModal } from '../LevelUpModal';
 import { tap } from '../feedback';
 import { prepareSounds } from '../sounds';
 
+// Home-screen icon for "Add to Home Screen" on iOS. On web the bundler turns the image into
+// { uri } with the base URL applied, so it follows the GitHub Pages subpath;
+// public/apple-touch-icon.png covers root-hosted builds.
+const touchIcon = Platform.OS === 'web' ? (require('../../assets/apple-touch-icon.png') as { uri: string }).uri : undefined;
+
 export default function Layout() {
   useEffect(prepareSounds, []);
   return <JourneyProvider>
+    {Platform.OS === 'web' ? <Head><link rel="apple-touch-icon" href={touchIcon} /></Head> : null}
     <Tabs initialRouteName="index" screenListeners={{ tabPress: tap }} screenOptions={{
       headerStyle: { backgroundColor: '#F7F8F4' },
       headerTintColor: '#182637',

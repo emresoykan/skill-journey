@@ -22,6 +22,10 @@ Mock analiz gerçek yapay zekâ değildir. Anahtar sözcük eşleşmesi ve metin
 
 Eşleşme kuralları `tests/analysis.test.mjs` içindeki örnek cümlelerle sınanır: `npm test` (Node 22.18+ gerekir). Yeni bir kök eklerken alakasız kelimelere takılıyorsa `src/mockAnalysis.ts` içindeki `falseFriends` listesine istisna ekleyin ve örneği teste yazın.
 
+## Logo
+
+Kaynak görsel `assets/logo/source.png` (1254×1254). Uygulama ikonu (`assets/icon.png`, 1024), Android adaptif ikonu (logo katmanın ortadaki %75'inde, çünkü başlatıcı yalnız ortadaki ~%66'yı gösterir), web sekme ikonu (`assets/favicon.png`, 48) ve iPhone ana ekran ikonu (`apple-touch-icon.png`, 180) bu görselden küçültülerek üretildi.
+
 ## iOS sonraki adım
 
 Windows üzerinde iOS simülatörü ve yerel Xcode build'i çalışmaz. iOS paketi için ileride [EAS Build](https://docs.expo.dev/build/introduction/) gibi bir bulut build hizmeti veya fiziksel Mac gerekir. Bu MVP'de iOS build ya da yayınlama yapılandırılmadı.
