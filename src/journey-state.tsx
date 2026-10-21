@@ -1,7 +1,8 @@
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
 import { loadEntries, loadHabits, saveEntries, saveHabits, type Entry } from './storage';
-import { habitAnalysis, habitTitleError, routinesProgress, type Habit, type HabitPreset } from './routines';
+import { DEFAULT_REMINDER, habitAnalysis, habitTitleError, reminderPlan, routinesProgress, type Habit, type HabitPreset, type ReminderSettings } from './routines';
+import { applyReminderPlan, ensureReminderPermission, loadReminder, remindersSupported, saveReminder } from './reminders';
 import { capAwards, correctSkillAward } from './skillCorrections';
 import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
 import { rewardFeedback, tap } from './feedback';
@@ -14,6 +15,9 @@ function useJourneyState() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitError, setHabitError] = useState('');
+  const [reminder, setReminderState] = useState<ReminderSettings>(DEFAULT_REMINDER);
+  const [reminderLoaded, setReminderLoaded] = useState(false);
+  const [reminderError, setReminderError] = useState('');
   const [draft, setDraft] = useState('');
   const [reward, setReward] = useState<Reward | null>(null);
   const [levelUpShown, setLevelUpShown] = useState<number | null>(null);
@@ -41,7 +45,29 @@ function useJourneyState() {
   useEffect(() => {
     loadEntries().then(setEntries).catch(() => setError('Kaydedilen anlar yüklenemedi.')).finally(() => setLoading(false));
     loadHabits().then(setHabits).catch(() => setHabitError('Rutinler yüklenemedi.'));
+    loadReminder().then(setReminderState).catch(() => {}).finally(() => setReminderLoaded(true));
   }, []);
+
+  // Rutinler, tikler ya da saat değişince önümüzdeki günlerin hatırlatmaları yeniden kurulur.
+  useEffect(() => {
+    if (!remindersSupported || loading || !reminderLoaded) return;
+    applyReminderPlan(reminderPlan(reminder, habits, entries))
+      .catch(error => { if (__DEV__) console.warn('[hatırlatıcı] kurulamadı', error); });
+  }, [reminder, habits, entries, loading, reminderLoaded]);
+
+  async function setReminder(next: ReminderSettings) {
+    setReminderError('');
+    try {
+      if (next.enabled && !(await ensureReminderPermission())) {
+        setReminderError('Bildirim izni verilmedi. Telefonun Ayarlar > Bildirimler bölümünden açabilirsin.');
+        return;
+      }
+      await saveReminder(next);
+      setReminderState(next);
+    } catch {
+      setReminderError('Hatırlatıcı ayarlanamadı. Lütfen tekrar dene.');
+    }
+  }
 
   // Elle yazılan kayıt da rutin tiki de buradan geçer: aynı XP, seri, hedef ve rozet hesabı.
   async function recordEntry(description: string, result: Analysis, habitId?: string) {
@@ -240,7 +266,7 @@ function useJourneyState() {
   }
 
 
-  return { habits,routines,habitError,setHabitError,toggleHabit,addHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { reminder,setReminder,reminderError,habits,routines,habitError,setHabitError,toggleHabit,addHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {

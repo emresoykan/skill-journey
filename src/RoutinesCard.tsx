@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { habitStreak } from './game';
 import { useJourney } from './journey-state';
 import { displaySkill } from './mockAnalysis';
-import { availablePresets, HABIT_XP, MAX_HABITS, type HabitPreset } from './routines';
+import { availablePresets, formatTime, HABIT_XP, MAX_HABITS, reminderTimes, type HabitPreset } from './routines';
+import { remindersSupported } from './reminders';
 
 const teal = '#166B65';
 const gold = '#F5C45A';
@@ -93,6 +94,31 @@ export function Routines() {
       {editing ? <Text style={s.note}>{"Kaldırdığın rutinin geçmiş tikleri ve XP'si silinmez."}</Text> : null}
     </View> : null}
     {habitError ? <Text style={s.error}>{habitError}</Text> : null}
+    {habits.length && !editing ? <Reminder /> : null}
+  </View>;
+}
+
+// Günde bir rutin hatırlatması; yalnız telefon uygulamasında çalışır.
+function Reminder() {
+  const { reminder, setReminder, reminderError } = useJourney();
+  if (!remindersSupported) return <Text style={s.reminderNote}>🔔 Rutin hatırlatıcıları telefon uygulamasında çalışır.</Text>;
+  return <View style={s.reminder}>
+    <View style={s.reminderHead}>
+      <Text style={s.reminderTitle}>🔔 Hatırlatıcı</Text>
+      <Switch accessibilityLabel="Rutin hatırlatıcısı" value={reminder.enabled} onValueChange={enabled => setReminder({ ...reminder, enabled })} trackColor={{ true: teal, false: '#D5DFDA' }} thumbColor="white" />
+    </View>
+    {reminder.enabled ? <>
+      <View style={s.times}>
+        {reminderTimes.map(([hour, minute]) => {
+          const selected = reminder.hour === hour && reminder.minute === minute;
+          return <Pressable key={`${hour}:${minute}`} accessibilityRole="radio" accessibilityState={{ selected }} aria-checked={selected} onPress={() => setReminder({ ...reminder, hour, minute })} style={[s.time, selected && s.timeOn]}>
+            <Text style={[s.timeText, selected && s.timeTextOn]}>{formatTime(hour, minute)}</Text>
+          </Pressable>;
+        })}
+      </View>
+      <Text style={s.reminderNote}>Her gün saat {formatTime(reminder.hour, reminder.minute)} · O günün rutinleri bitmişse hatırlatma gelmez.</Text>
+    </> : null}
+    {reminderError ? <Text style={s.error}>{reminderError}</Text> : null}
   </View>;
 }
 
@@ -153,6 +179,15 @@ const s = StyleSheet.create({
   chipText: { color: '#182637', fontSize: 13, fontWeight: '600' },
   note: { color: '#9AA6A8', fontSize: 11, marginTop: 12 },
   error: { color: '#B34242', fontSize: 12, marginTop: 10 },
+  reminder: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#EEF2EE' },
+  reminderHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reminderTitle: { color: '#182637', fontSize: 14, fontWeight: '800' },
+  reminderNote: { color: '#657482', fontSize: 11, lineHeight: 16, marginTop: 10 },
+  times: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  time: { borderRadius: 12, borderWidth: 1, borderColor: '#E2E9E4', paddingHorizontal: 12, paddingVertical: 7, backgroundColor: 'white' },
+  timeOn: { backgroundColor: teal, borderColor: teal },
+  timeText: { color: '#182637', fontSize: 13, fontWeight: '700' },
+  timeTextOn: { color: 'white' },
   streakRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EEF2EE' },
   week: { flexDirection: 'row', gap: 5, marginTop: 6 },
   day: { width: 18, height: 18, borderRadius: 5, backgroundColor: '#E2E9E4' },

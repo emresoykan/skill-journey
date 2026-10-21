@@ -57,3 +57,24 @@ export function habitTitleError(title: string, habits: Habit[]): string | null {
 
 export const availablePresets = (habits: Habit[]) =>
   habitPresets.filter(preset => !habits.some(habit => normalizeTitle(habit.title) === normalizeTitle(preset.title)));
+
+// Günlük rutin hatırlatıcısı. Bildirimler önümüzdeki günler için tek tek kurulur;
+// böylece o günün rutinleri tamamsa o günün hatırlatması hiç gelmez.
+export type ReminderSettings = { enabled: boolean; hour: number; minute: number };
+export const DEFAULT_REMINDER: ReminderSettings = { enabled: false, hour: 20, minute: 0 };
+export const REMINDER_DAYS = 14;
+export const reminderTimes: [number, number][] = [[7, 30], [9, 0], [12, 30], [18, 0], [20, 0], [21, 30]];
+export const formatTime = (hour: number, minute: number) => `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+export function reminderPlan(settings: ReminderSettings, habits: Habit[], entries: Entry[], now = new Date(), days = REMINDER_DAYS) {
+  if (!settings.enabled || habits.length === 0) return [];
+  const doneToday = routinesProgress(habits, entries, now).count;
+  const plan: { date: Date; body: string }[] = [];
+  for (let offset = 0; offset < days; offset++) {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, settings.hour, settings.minute);
+    if (date <= now) continue;
+    const left = offset === 0 ? habits.length - doneToday : habits.length;
+    if (left > 0) plan.push({ date, body: `${left} rutinin seni bekliyor. Serini koru 🔥` });
+  }
+  return plan;
+}

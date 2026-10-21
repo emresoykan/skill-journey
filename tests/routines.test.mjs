@@ -1,7 +1,7 @@
 // Günlük rutinlerin tik, ilerleme ve ad doğrulama kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { availablePresets, habitAnalysis, habitEntriesToday, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, routinesProgress } from '../src/routines.ts';
+import { availablePresets, formatTime, habitAnalysis, habitEntriesToday, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
 
 const now = new Date(2026, 9, 21, 15, 0);
 const yesterday = new Date(2026, 9, 20, 9, 0);
@@ -55,4 +55,36 @@ test('eklenmiş hazır öneriler listeden çıkar', () => {
   const left = availablePresets([habit('h1', 'Su iç')]);
   assert.equal(left.length, habitPresets.length - 1);
   assert.ok(!left.some(preset => preset.title === 'Su iç'));
+});
+
+const on = { enabled: true, hour: 20, minute: 0 };
+
+test('hatırlatıcı kapalıysa ya da rutin yoksa bildirim kurulmaz', () => {
+  assert.equal(reminderPlan({ ...on, enabled: false }, [habit('h1')], [], now).length, 0);
+  assert.equal(reminderPlan(on, [], [], now).length, 0);
+});
+
+test('saat geçmediyse bugünden başlayarak 14 gün kurulur ve kalan rutin sayısı yazılır', () => {
+  const plan = reminderPlan(on, [habit('h1'), habit('h2')], [entry('a', 'h1')], now);
+  assert.equal(plan.length, 14);
+  assert.deepEqual([plan[0].date.getDate(), plan[0].date.getHours(), plan[0].date.getMinutes()], [21, 20, 0]);
+  assert.match(plan[0].body, /^1 rutinin/);
+  assert.match(plan[1].body, /^2 rutinin/);
+});
+
+test('bugünün rutinleri tamamsa bugünkü hatırlatma atlanır', () => {
+  const plan = reminderPlan(on, [habit('h1')], [entry('a', 'h1')], now);
+  assert.equal(plan.length, 13);
+  assert.equal(plan[0].date.getDate(), 22);
+});
+
+test('saat geçtiyse ilk hatırlatma yarın', () => {
+  const plan = reminderPlan({ ...on, hour: 9, minute: 0 }, [habit('h1')], [], now);
+  assert.equal(plan[0].date.getDate(), 22);
+  assert.equal(plan.length, 13);
+});
+
+test('saat iki haneli biçimlenir', () => {
+  assert.equal(formatTime(7, 30), '07:30');
+  assert.equal(formatTime(20, 0), '20:00');
 });
