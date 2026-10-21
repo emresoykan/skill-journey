@@ -11,6 +11,7 @@ import { PlayerCard } from './PlayerCard';
 import { DailyQuest } from './DailyQuest';
 import { RewardCard, isSpecialReward } from './RewardCard';
 import { TodayLog } from './TodayLog';
+import { RoutineStreaks, Routines } from './RoutinesCard';
 import { Badges } from './Badges';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { Confetti } from './Confetti';
@@ -36,10 +37,12 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         {section === 'growth' ? <>
         <PlayerCard totalXp={totalXp} streak={streak} />
         {!loading ? <Badges entries={entries} /> : null}
+        <RoutineStreaks />
         {!loading ? <ProgressChart entries={entries} /> : null}
         </> : null}
         {section === 'today' ? <>
         <PlayerCard totalXp={totalXp} streak={streak} />
+        <Routines />
         <TodayLog today={today} draft={draft} error={error} busy={busy} disabled={loading} onChangeDraft={v => { setDraft(v); setError(''); }} onAdd={addMoment}>
           {reward ? <RewardCard key={reward.id} reward={reward} /> : analyzing ? <Text style={s.analyzing}>✦ Becerilerin hesaplanıyor…</Text> : null}
         </TodayLog>
@@ -75,7 +78,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
               {editingId === entry.id ? <EntryEditForm entry={entry} /> : (
                 <View>
                   <Text style={s.description}>{entry.description}</Text>
-                  <Text style={s.awardSummary}>{entry.awards.map(award => `${displaySkill(award.skill)} +${award.xp}`).join(' · ')}{entry.bonusXp ? ` · 🎯 Görev +${entry.bonusXp}` : ''}</Text>
+                  <Text style={s.awardSummary}>{entry.awards.map(award => `${displaySkill(award.skill)} +${award.xp}`).join(' · ')}{entry.bonusXp ? ` · 🎯 Görev +${entry.bonusXp}` : ''}{entry.habitId ? ' · 🔁 Rutin' : ''}</Text>
                   <View style={s.entryFoot}>
                     <Text style={s.timelineXp}>+{entryXp(entry)} XP</Text>
                     <EntryActionButtons entry={entry} />

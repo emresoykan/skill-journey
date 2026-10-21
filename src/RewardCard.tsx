@@ -38,6 +38,7 @@ export function rewardPerks(reward: Reward): string[] {
     ...reward.newSkills.map(skill => `✦ Yeni beceri keşfedildi: ${displaySkill(skill)}`),
     ...reward.leveledSkills.map(skill => `⬆️ ${displaySkill(skill)} seviye atladı`),
     ...(reward.goalReached ? ['✅ Günlük hedef tamam! Bugün harika gidiyorsun.'] : []),
+    ...(reward.routinesComplete ? ['🌟 Bugünün tüm rutinleri tamam!'] : []),
     ...(reward.bonusXp ? [`🎯 Günün görevi tamamlandı: +${reward.bonusXp} bonus XP`] : []),
     ...(reward.streakExtended && reward.streak > 0 ? [`🔥 Seri ${reward.streak} gün oldu!`] : []),
     ...reward.newBadges.map(badge => `${badge.icon} Yeni rozet: ${badge.title}`),

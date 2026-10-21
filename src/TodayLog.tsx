@@ -63,7 +63,7 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
             <Text style={s.check}>✓</Text>
             <View style={{ flex: 1 }}>
               <Text style={s.itemText} numberOfLines={openId === entry.id ? undefined : 2}>{entry.description}</Text>
-              <Text style={s.itemSkills}>{entry.awards.map(award => displaySkill(award.skill)).join(' · ')}{entry.bonusXp ? ' · 🎯 Görev' : ''}</Text>
+              <Text style={s.itemSkills}>{entry.awards.map(award => displaySkill(award.skill)).join(' · ')}{entry.bonusXp ? ' · 🎯 Görev' : ''}{entry.habitId ? ' · 🔁 Rutin' : ''}</Text>
             </View>
             <Text style={s.itemXp}>+{entryXp(entry)}</Text>
           </Pressable>
