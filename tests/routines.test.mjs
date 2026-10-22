@@ -1,7 +1,7 @@
 // Günlük rutinlerin tik, ilerleme ve ad doğrulama kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { availablePresets, dayKey, formatMeasures, formatTime, habitMeasures, measureError, parseAmount, toMinutes, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
+import { availablePresets, dayKey, formatMeasures, formatTime, habitMeasures, measureError, parseAmount, toMinutes, weeklyTotals, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
 
 const now = new Date(2026, 9, 21, 15, 0);
 const yesterday = new Date(2026, 9, 20, 9, 0);
@@ -139,4 +139,21 @@ test('ölçüler okunur biçimde yazılır', () => {
   assert.equal(formatMeasures({ pages: 30, duration: 90 }), '1 sa 30 dk · 30 sayfa');
   assert.equal(formatMeasures({ duration: 120 }), '2 sa');
   assert.equal(formatMeasures(undefined), '');
+});
+
+test('haftalık toplam: son 7 gün, yalnız o rutin, gün sayısı tekil', () => {
+  const walk = habit('w', 'Yürüyüş yap');
+  const day = n => new Date(2026, 9, 21 - n, 10, 0);
+  const log = (id, n, measures, habitId = 'w') => ({ ...entry(id, habitId, day(n)), measures });
+  const entries = [
+    log('a', 0, { steps: 6000, duration: 45 }),
+    log('b', 0, { steps: 1000 }),
+    log('c', 3, { steps: 8000, duration: 60 }),
+    log('d', 6, { duration: 30 }),
+    log('e', 7, { steps: 99999 }),
+    log('f', 1, { steps: 5000 }, 'baska'),
+    log('g', 2, undefined),
+  ];
+  assert.deepEqual(weeklyTotals(walk, entries, now), { days: 4, totals: { steps: 15000, duration: 135 } });
+  assert.deepEqual(weeklyTotals(habit('x'), entries, now), { days: 0, totals: {} });
 });

@@ -116,6 +116,25 @@ export function formatMeasures(values: MeasureValues | undefined): string {
   ].filter(Boolean).join(' · ');
 }
 
+// Son 7 gün (bugün dahil): rutinin kaç gün yapıldığı ve girilen ölçülerin toplamı.
+// Sayılı rutinde (su) gün, hedefe ulaşılan gündür; günlük sayılar saklanmadığı için toplam bardak yoktur.
+export function weeklyTotals(habit: Habit, entries: Entry[], now = new Date()) {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+  const days = new Set<string>();
+  const totals: MeasureValues = {};
+  for (const entry of entries) {
+    if (entry.habitId !== habit.id) continue;
+    const date = new Date(entry.createdAt);
+    if (date < start || date > now) continue;
+    days.add(dayKey(date));
+    for (const measure of ['steps', 'duration', 'pages'] as Measure[]) {
+      const value = entry.measures?.[measure];
+      if (value) totals[measure] = (totals[measure] ?? 0) + value;
+    }
+  }
+  return { days: days.size, totals };
+}
+
 // Sayılı rutinlerin bugünkü sayısı. Yalnız bugünün sayısı geçerlidir; ertesi gün sıfırdan başlar.
 // Bugün tamamlanmış (kaydı olan) rutin, sayı daha az görünse de hedefte sayılır.
 export type HabitCounts = Record<string, { day: string; count: number }>;

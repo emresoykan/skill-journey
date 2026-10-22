@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { habitStreak } from './game';
 import { useJourney } from './journey-state';
 import { displaySkill } from './mockAnalysis';
-import { availablePresets, formatMeasures, formatTime, HABIT_XP, habitGoal, habitIcons, habitMeasures, MAX_HABITS, MAX_TARGET, measureError, measureNames, parseAmount, reminderTimes, toMinutes, type Habit, type HabitPreset, type MeasureValues } from './routines';
+import { availablePresets, formatMeasures, formatTime, HABIT_XP, habitGoal, habitIcons, habitMeasures, MAX_HABITS, MAX_TARGET, measureError, measureNames, parseAmount, reminderTimes, toMinutes, weeklyTotals, type Habit, type HabitPreset, type MeasureValues } from './routines';
 import { reminderNote, remindersSupported } from './reminders';
 import { MicButton } from './MicButton';
 
@@ -282,6 +282,30 @@ export function RoutineStreaks() {
   </View>;
 }
 
+// Gelişim sekmesi: ölçülü ve sayılı rutinlerin son 7 gündeki toplamları (adım, süre, sayfa, hedefe ulaşılan gün).
+export function WeeklyTotals() {
+  const { habits, entries } = useJourney();
+  const tracked = habits.filter(habit => habitMeasures(habit).length > 0 || habitGoal(habit).target > 1);
+  if (!tracked.length) return null;
+  return <View style={s.card}>
+    <Text style={[s.title, { marginBottom: 6 }]}>Son 7 gün</Text>
+    {tracked.map(habit => {
+      const { days, totals } = weeklyTotals(habit, entries);
+      const { target, unit } = habitGoal(habit);
+      const summary = target > 1 ? `${target} ${unit} hedefi: ${days}/7 gün` : formatMeasures(totals);
+      return <View key={habit.id} style={s.streakRow} accessibilityLabel={`${habit.title}: ${days ? summary || `${days} gün` : 'bu hafta yok'}`}>
+        <Text style={s.icon}>{habit.icon}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.habitTitle} numberOfLines={1}>{habit.title}</Text>
+          <Text style={[s.weekTotal, !days && { color: '#9AA6A8' }]}>{days ? summary || 'Ölçü girilmedi' : 'Bu hafta henüz yok'}</Text>
+        </View>
+        {target > 1 ? null : <Text style={[s.streakCount, !days && { opacity: 0.4 }]}>{days} gün</Text>}
+      </View>;
+    })}
+    <Text style={s.note}>Bugün dahil son 7 gün. Ölçüler rutine tik atarken girilenlerdir.</Text>
+  </View>;
+}
+
 const s = StyleSheet.create({
   card: { backgroundColor: 'white', borderColor: '#E2E9E4', borderWidth: 1, borderRadius: 22, padding: 18, marginBottom: 18 },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -379,4 +403,5 @@ const s = StyleSheet.create({
   dayOn: { backgroundColor: gold },
   dayToday: { borderWidth: 2, borderColor: gold, backgroundColor: 'white' },
   streakCount: { color: '#8B5B00', fontSize: 15, fontWeight: '800' },
+  weekTotal: { color: teal, fontSize: 14, fontWeight: '800', marginTop: 3 },
 });
