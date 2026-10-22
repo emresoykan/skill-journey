@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { habitStreak } from './game';
 import { useJourney } from './journey-state';
 import { displaySkill } from './mockAnalysis';
-import { availablePresets, formatMeasures, formatTime, HABIT_XP, habitGoal, habitIcons, habitMeasures, MAX_HABITS, MAX_TARGET, measureError, measureNames, parseAmount, reminderTimes, toMinutes, weeklyTotals, type Habit, type HabitPreset, type MeasureValues } from './routines';
+import { availablePresets, formatDuration, formatMeasures, formatTime, GOAL_STEP_MINUTES, HABIT_XP, habitGoal, habitIcons, habitMeasures, MAX_GOAL_MINUTES, MAX_HABITS, MAX_TARGET, measureError, measureNames, parseAmount, reminderTimes, toMinutes, weeklyTotals, type Habit, type HabitPreset, type MeasureValues } from './routines';
 import { reminderNote, remindersSupported } from './reminders';
 import { MicButton } from './MicButton';
 
@@ -52,7 +52,9 @@ export function Routines() {
       const count = habitCount(habit);
       // Ölçülü rutin (ör. yürüyüşte adım ve süre): dokununca ölçü formu açılır, tik formdan atılır.
       const measured = !counted && habitMeasures(habit).length > 0;
-      const summary = measured ? formatMeasures(routines.done.get(habit.id)?.measures) : '';
+      const logged = routines.done.get(habit.id)?.measures;
+      const goalMinutes = measured ? habit.goalMinutes : undefined;
+      const summary = measured ? [formatMeasures(logged), goalMinutes && done ? `hedef ${formatDuration(goalMinutes)}${(logged?.duration ?? 0) >= goalMinutes ? ' ✓' : ''}` : ''].filter(Boolean).join(' · ') : '';
       return <View key={habit.id}><View style={s.rowWrap}>
         <Pressable
           accessibilityRole={counted || measured ? 'button' : 'checkbox'}
@@ -67,7 +69,7 @@ export function Routines() {
           <View style={{ flex: 1 }}>
             <Text style={[s.habitTitle, done && s.habitTitleDone]}>{habit.title}</Text>
             {summary ? <Text style={s.summary}>{summary}</Text> : null}
-            <Text style={s.meta}>{counted ? `${count}/${target} ${unit} · ` : ''}{displaySkill(habit.skill)} · +{HABIT_XP} XP{streak ? `  ·  🔥 ${streak} gün` : ''}</Text>
+            <Text style={s.meta}>{counted ? `${count}/${target} ${unit} · ` : ''}{goalMinutes && !done ? `Hedef ${formatDuration(goalMinutes)} · ` : ''}{displaySkill(habit.skill)} · +{HABIT_XP} XP{streak ? `  ·  🔥 ${streak} gün` : ''}</Text>
             {counted ? <View style={s.dots}>
               {Array.from({ length: target }, (_, i) => <View key={i} style={[s.dot, i < count && s.dotOn]} />)}
             </View> : null}
@@ -151,7 +153,7 @@ function MeasureForm({ habit, onClose }: { habit: Habit; onClose: () => void }) 
       inputMode={decimal ? 'decimal' : 'numeric'} returnKeyType="done" onSubmitEditing={save} maxLength={8} style={s.fieldInput} />;
 
   return <View style={s.measure}>
-    <Text style={s.measureTitle}>{done ? 'Bugünkü ölçüler' : 'Bugün ne kadar?'}</Text>
+    <Text style={s.measureTitle}>{done ? 'Bugünkü ölçüler' : 'Bugün ne kadar?'}{habit.goalMinutes ? `  ·  hedef ${formatDuration(habit.goalMinutes)}` : ''}</Text>
     {measures.includes('steps') ? <View style={s.field}>
       <Text style={s.fieldLabel}>{measureNames.steps}</Text>
       {field(measureNames.steps, steps, setSteps, 'örn. 6500')}
@@ -186,6 +188,10 @@ function MeasureForm({ habit, onClose }: { habit: Habit; onClose: () => void }) 
 function HabitEditRow({ habit }: { habit: Habit }) {
   const { busy, updateHabit, removeHabit } = useJourney();
   const { target, unit } = habitGoal(habit);
+  // Süre ölçülü rutinde (yürüyüş, kitap, spor) hedef "günde kaç kez" değil, günlük süredir.
+  const measures = habitMeasures(habit);
+  const timed = measures.includes('duration');
+  const goalMinutes = habit.goalMinutes ?? 0;
   const [title, setTitle] = useState(habit.title);
   const [picking, setPicking] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -208,7 +214,16 @@ function HabitEditRow({ habit }: { habit: Habit }) {
         <Text style={s.removeText}>Kaldır</Text>
       </Pressable>
     </View>
-    <View style={s.goalLine}>
+    {timed ? <View style={s.goalLine}>
+      <Text style={s.goalLabel}>Günde</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Süre hedefini azalt: ${habit.title}`} disabled={busy || goalMinutes <= 0} onPress={() => updateHabit(habit.id, { goalMinutes: goalMinutes - GOAL_STEP_MINUTES })} style={[s.step, goalMinutes <= 0 && { opacity: 0.35 }]}>
+        <Text style={s.stepText}>−</Text>
+      </Pressable>
+      <Text accessibilityLiveRegion="polite" style={s.goalValue}>{goalMinutes ? formatDuration(goalMinutes) : 'Hedef yok'}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Süre hedefini artır: ${habit.title}`} disabled={busy || goalMinutes >= MAX_GOAL_MINUTES} onPress={() => updateHabit(habit.id, { goalMinutes: goalMinutes + GOAL_STEP_MINUTES })} style={[s.step, goalMinutes >= MAX_GOAL_MINUTES && { opacity: 0.35 }]}>
+        <Text style={s.stepText}>+</Text>
+      </Pressable>
+    </View> : measures.length ? null : <View style={s.goalLine}>
       <Text style={s.goalLabel}>Günde</Text>
       <Pressable accessibilityRole="button" accessibilityLabel={`Hedefi azalt: ${habit.title}`} disabled={busy || target <= 1} onPress={() => updateHabit(habit.id, { target: target - 1 })} style={[s.step, target <= 1 && { opacity: 0.35 }]}>
         <Text style={s.stepText}>−</Text>
@@ -217,7 +232,7 @@ function HabitEditRow({ habit }: { habit: Habit }) {
       <Pressable accessibilityRole="button" accessibilityLabel={`Hedefi artır: ${habit.title}`} disabled={busy || target >= MAX_TARGET} onPress={() => updateHabit(habit.id, { target: target + 1 })} style={[s.step, target >= MAX_TARGET && { opacity: 0.35 }]}>
         <Text style={s.stepText}>+</Text>
       </Pressable>
-    </View>
+    </View>}
     {picking ? <View style={s.iconGrid}>
       {habitIcons.map(icon => <Pressable key={icon} accessibilityRole="button" accessibilityLabel={`Simge seç: ${icon}`} accessibilityState={{ selected: icon === habit.icon }} disabled={busy} onPress={() => { setPicking(false); if (icon !== habit.icon) updateHabit(habit.id, { icon }); }} style={[s.iconChoice, icon === habit.icon && s.iconChoiceOn]}>
         <Text style={s.iconChoiceText}>{icon}</Text>
