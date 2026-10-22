@@ -2,14 +2,16 @@
 import type { Analysis } from './mockAnalysis';
 import type { Entry } from './storage';
 
-export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string };
-export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill'>;
+// target: günde kaç kez (ör. 8 bardak su); yoksa tek tik. unit: sayının birimi ("bardak").
+export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string; target?: number; unit?: string };
+export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill' | 'target' | 'unit'>;
 
 export const HABIT_XP = 10;
 export const MAX_HABITS = 12;
+export const MAX_TARGET = 20;
 
 export const habitPresets: HabitPreset[] = [
-  { icon: '💧', title: 'Su iç', skill: 'Self Care' },
+  { icon: '💧', title: 'Su iç', skill: 'Self Care', target: 8, unit: 'bardak' },
   { icon: '📖', title: '20 dk kitap oku', skill: 'Learning' },
   { icon: '🚶', title: 'Yürüyüş yap', skill: 'Fitness' },
   { icon: '🧘', title: 'Meditasyon', skill: 'Self Care' },
@@ -22,7 +24,7 @@ export const habitPresets: HabitPreset[] = [
 // Düzenleme modunda rutine seçilebilecek simgeler.
 export const habitIcons = ['⭐', '💧', '📖', '🚶', '🧘', '🛏️', '📝', '🏋️', '📵', '🥗', '💊', '🦷', '☀️', '🌙', '🧹', '🎸', '💻', '🚴', '🙏', '❤️'];
 
-const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+export const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 const isSameDay = (iso: string, now: Date) => dayKey(new Date(iso)) === dayKey(now);
 export const normalizeTitle = (title: string) => title.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
 
@@ -56,6 +58,22 @@ export function habitTitleError(title: string, habits: Habit[]): string | null {
   if (habits.length >= MAX_HABITS) return `En fazla ${MAX_HABITS} rutin ekleyebilirsin.`;
   if (habits.some(habit => normalizeTitle(habit.title) === normalizeTitle(title))) return 'Bu rutin zaten listende.';
   return null;
+}
+
+// Günlük hedef: rutinin kendi hedefi; yoksa aynı adlı hazır önerininki (hedef eklenmeden önce eklenmiş "Su iç" de
+// 8 bardak sayılır); o da yoksa tek tik.
+export function habitGoal(habit: Habit): { target: number; unit: string } {
+  const preset = habitPresets.find(item => normalizeTitle(item.title) === normalizeTitle(habit.title));
+  return { target: habit.target ?? preset?.target ?? 1, unit: habit.unit ?? preset?.unit ?? 'kez' };
+}
+
+// Sayılı rutinlerin bugünkü sayısı. Yalnız bugünün sayısı geçerlidir; ertesi gün sıfırdan başlar.
+// Bugün tamamlanmış (kaydı olan) rutin, sayı daha az görünse de hedefte sayılır.
+export type HabitCounts = Record<string, { day: string; count: number }>;
+export function habitCountToday(counts: HabitCounts, habit: Habit, done: boolean, now = new Date()) {
+  const { target } = habitGoal(habit);
+  const stored = counts[habit.id]?.day === dayKey(now) ? counts[habit.id].count : 0;
+  return Math.min(target, done ? Math.max(stored, target) : stored);
 }
 
 export const availablePresets = (habits: Habit[]) =>

@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { habitStreak } from './game';
 import { useJourney } from './journey-state';
 import { displaySkill } from './mockAnalysis';
-import { availablePresets, formatTime, HABIT_XP, habitIcons, MAX_HABITS, reminderTimes, type Habit, type HabitPreset } from './routines';
+import { availablePresets, formatTime, HABIT_XP, habitGoal, habitIcons, MAX_HABITS, MAX_TARGET, reminderTimes, type Habit, type HabitPreset } from './routines';
 import { reminderNote, remindersSupported } from './reminders';
 import { MicButton } from './MicButton';
 
@@ -12,7 +12,7 @@ const gold = '#F5C45A';
 
 // Bugün sekmesi: her gün tekrarlanan rutinler; dokununca tik atılır ya da kaldırılır.
 export function Routines() {
-  const { habits, routines, entries, busy, loading, habitError, setHabitError, toggleHabit, addHabit } = useJourney();
+  const { habits, routines, entries, busy, loading, habitError, setHabitError, toggleHabit, stepHabit, habitCount, addHabit } = useJourney();
   const [editing, setEditing] = useState(false);
   const [focusAdd, setFocusAdd] = useState(false);
   const [title, setTitle] = useState('');
@@ -45,23 +45,34 @@ export function Routines() {
       if (editing) return <HabitEditRow key={habit.id} habit={habit} />;
       const done = routines.done.has(habit.id);
       const streak = habitStreak(entries, habit.id).count;
+      // Sayılı rutin (ör. 8 bardak su): her dokunuş bir ekler, "−" son eklemeyi geri alır.
+      const { target, unit } = habitGoal(habit);
+      const counted = target > 1;
+      const count = habitCount(habit);
       return <View key={habit.id} style={s.rowWrap}>
         <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: done, disabled: busy }}
-          aria-checked={done}
-          accessibilityLabel={`${habit.title}${streak ? `, ${streak} günlük seri` : ''}`}
-          disabled={busy}
+          accessibilityRole={counted ? 'button' : 'checkbox'}
+          accessibilityState={counted ? { disabled: busy || done } : { checked: done, disabled: busy }}
+          aria-checked={counted ? undefined : done}
+          accessibilityLabel={`${habit.title}${counted ? `, ${count}/${target} ${unit}${done ? '' : `, bir ${unit} ekle`}` : ''}${streak ? `, ${streak} günlük seri` : ''}`}
+          disabled={busy || (counted && done)}
           onPress={() => toggleHabit(habit)}
           style={[s.row, done && s.rowDone]}
         >
           <Text style={s.icon}>{habit.icon}</Text>
           <View style={{ flex: 1 }}>
             <Text style={[s.habitTitle, done && s.habitTitleDone]}>{habit.title}</Text>
-            <Text style={s.meta}>{displaySkill(habit.skill)} · +{HABIT_XP} XP{streak ? `  ·  🔥 ${streak} gün` : ''}</Text>
+            <Text style={s.meta}>{counted ? `${count}/${target} ${unit} · ` : ''}{displaySkill(habit.skill)} · +{HABIT_XP} XP{streak ? `  ·  🔥 ${streak} gün` : ''}</Text>
+            {counted ? <View style={s.dots}>
+              {Array.from({ length: target }, (_, i) => <View key={i} style={[s.dot, i < count && s.dotOn]} />)}
+            </View> : null}
           </View>
-          <View style={[s.circle, done && s.circleDone]}><Text style={s.circleMark}>{done ? '✓' : ''}</Text></View>
+          {counted && !done ? <View style={s.circle}><Text style={s.plus}>+</Text></View>
+            : <View style={[s.circle, done && s.circleDone]}><Text style={s.circleMark}>{done ? '✓' : ''}</Text></View>}
         </Pressable>
+        {counted && count > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`${habit.title}: bir ${unit} geri al`} hitSlop={6} disabled={busy} onPress={() => stepHabit(habit, -1)} style={s.minus}>
+          <Text style={s.minusText}>−</Text>
+        </Pressable> : null}
       </View>;
     })}
 
@@ -107,6 +118,7 @@ export function Routines() {
 // Düzenleme modunda bir rutin: simge seçimi, yerinde yeniden adlandırma, onaylı kaldırma.
 function HabitEditRow({ habit }: { habit: Habit }) {
   const { busy, updateHabit, removeHabit } = useJourney();
+  const { target, unit } = habitGoal(habit);
   const [title, setTitle] = useState(habit.title);
   const [picking, setPicking] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -127,6 +139,16 @@ function HabitEditRow({ habit }: { habit: Habit }) {
       <MicButton value="" onChangeText={setTitle} onFinal={renameTo} size={44} />
       <Pressable accessibilityRole="button" accessibilityLabel={`Rutini kaldır: ${habit.title}`} onPress={() => setConfirming(true)} style={s.removePill}>
         <Text style={s.removeText}>Kaldır</Text>
+      </Pressable>
+    </View>
+    <View style={s.goalLine}>
+      <Text style={s.goalLabel}>Günde</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Hedefi azalt: ${habit.title}`} disabled={busy || target <= 1} onPress={() => updateHabit(habit.id, { target: target - 1 })} style={[s.step, target <= 1 && { opacity: 0.35 }]}>
+        <Text style={s.stepText}>−</Text>
+      </Pressable>
+      <Text accessibilityLiveRegion="polite" style={s.goalValue}>{target} {unit}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Hedefi artır: ${habit.title}`} disabled={busy || target >= MAX_TARGET} onPress={() => updateHabit(habit.id, { target: target + 1 })} style={[s.step, target >= MAX_TARGET && { opacity: 0.35 }]}>
+        <Text style={s.stepText}>+</Text>
       </Pressable>
     </View>
     {picking ? <View style={s.iconGrid}>
@@ -214,6 +236,12 @@ const s = StyleSheet.create({
   circle: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: '#C9D5CF', alignItems: 'center', justifyContent: 'center' },
   circleDone: { backgroundColor: teal, borderColor: teal },
   circleMark: { color: 'white', fontSize: 16, fontWeight: '800' },
+  plus: { color: teal, fontSize: 18, fontWeight: '800', lineHeight: 20 },
+  dots: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E2E9E4' },
+  dotOn: { backgroundColor: '#4FA3D9' },
+  minus: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
+  minusText: { color: '#657482', fontSize: 20, fontWeight: '700', lineHeight: 22 },
   removeText: { color: '#A33D3D', fontSize: 12, fontWeight: '800' },
   editButton: { borderRadius: 12, borderWidth: 1, borderColor: '#BEDDD1', backgroundColor: '#EEF8F3', paddingHorizontal: 10, paddingVertical: 6 },
   editButtonOn: { backgroundColor: teal, borderColor: teal },
@@ -223,6 +251,11 @@ const s = StyleSheet.create({
   addRoutineText: { color: teal, fontSize: 14, fontWeight: '800' },
   editRow: { marginTop: 8, borderRadius: 14, borderWidth: 1, borderColor: '#E2E9E4', backgroundColor: '#FAFBF9', padding: 8 },
   editLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  goalLine: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, paddingLeft: 4 },
+  goalLabel: { color: '#657482', fontSize: 13, fontWeight: '700' },
+  goalValue: { color: '#182637', fontSize: 14, fontWeight: '800', minWidth: 70, textAlign: 'center' },
+  step: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
+  stepText: { color: teal, fontSize: 18, fontWeight: '800', lineHeight: 20 },
   iconButton: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
   iconButtonOn: { borderColor: teal },
   // minWidth 0: web'de <input> kendi varsayılan genişliğinin altına küçülmez; yoksa satırdaki düğmeler kartın dışına taşar.
