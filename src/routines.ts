@@ -3,8 +3,11 @@ import type { Analysis } from './mockAnalysis';
 import type { Entry } from './storage';
 
 // target: günde kaç kez (ör. 8 bardak su); yoksa tek tik. unit: sayının birimi ("bardak").
-export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string; target?: number; unit?: string };
-export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill' | 'target' | 'unit'>;
+// measures: tik atarken sorulan ölçüler (ör. yürüyüşte adım ve süre).
+export type Measure = 'steps' | 'duration' | 'pages';
+export type MeasureValues = Partial<Record<Measure, number>>;
+export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string; target?: number; unit?: string; measures?: Measure[] };
+export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill' | 'target' | 'unit' | 'measures'>;
 
 export const HABIT_XP = 10;
 export const MAX_HABITS = 12;
@@ -12,12 +15,12 @@ export const MAX_TARGET = 20;
 
 export const habitPresets: HabitPreset[] = [
   { icon: '💧', title: 'Su iç', skill: 'Self Care', target: 8, unit: 'bardak' },
-  { icon: '📖', title: '20 dk kitap oku', skill: 'Learning' },
-  { icon: '🚶', title: 'Yürüyüş yap', skill: 'Fitness' },
+  { icon: '📖', title: '20 dk kitap oku', skill: 'Learning', measures: ['duration', 'pages'] },
+  { icon: '🚶', title: 'Yürüyüş yap', skill: 'Fitness', measures: ['steps', 'duration'] },
   { icon: '🧘', title: 'Meditasyon', skill: 'Self Care' },
   { icon: '🛏️', title: 'Yatağını topla', skill: 'Household' },
   { icon: '📝', title: 'Günlük yaz', skill: 'Self Awareness' },
-  { icon: '🏋️', title: 'Spor yap', skill: 'Fitness' },
+  { icon: '🏋️', title: 'Spor yap', skill: 'Fitness', measures: ['duration'] },
   { icon: '📵', title: 'Ekransız akşam', skill: 'Self Care' },
 ];
 
@@ -65,6 +68,52 @@ export function habitTitleError(title: string, habits: Habit[]): string | null {
 export function habitGoal(habit: Habit): { target: number; unit: string } {
   const preset = habitPresets.find(item => normalizeTitle(item.title) === normalizeTitle(habit.title));
   return { target: habit.target ?? preset?.target ?? 1, unit: habit.unit ?? preset?.unit ?? 'kez' };
+}
+
+// Tik atarken sorulan ölçüler: rutinin kendi listesi, yoksa aynı adlı hazır önerininki.
+export function habitMeasures(habit: Habit): Measure[] {
+  return habit.measures ?? habitPresets.find(item => normalizeTitle(item.title) === normalizeTitle(habit.title))?.measures ?? [];
+}
+
+// Süre dakika olarak saklanır. Üst sınırlar yazım hatasını yakalar (ör. fazladan sıfır).
+export const MEASURE_LIMITS: Record<Measure, number> = { steps: 100000, duration: 24 * 60, pages: 2000 };
+export const measureNames: Record<Measure, string> = { steps: 'Adım', duration: 'Süre', pages: 'Sayfa' };
+
+// Yazılan sayıyı çevirir. Boş → null (ölçü girilmedi); geçersiz → NaN.
+export function parseAmount(text: string, decimals = false): number | null {
+  const clean = text.trim().replace(/\s/g, '');
+  if (!clean) return null;
+  // Saatte nokta ve virgül ondalık ayırıcıdır ("1,5", "1.5"); adım ve sayfada binlik ayırıcıdır ("6.500").
+  const normalized = decimals ? clean.replace(',', '.') : clean.replace(/[.,]/g, '');
+  const value = Number(normalized);
+  return /^\d+(\.\d+)?$/.test(normalized) && value > 0 ? value : NaN;
+}
+
+// Saat seçilmişse dakikaya çevrilir ("1,5" saat → 90 dk).
+export const toMinutes = (value: number, unit: 'dk' | 'saat') => Math.round(unit === 'saat' ? value * 60 : value);
+
+export function measureError(values: MeasureValues): string | null {
+  for (const measure of Object.keys(values) as Measure[]) {
+    const value = values[measure]!;
+    if (!Number.isFinite(value) || value <= 0) return `${measureNames[measure]} için geçerli bir sayı yaz.`;
+    if (value > MEASURE_LIMITS[measure]) return measure === 'duration' ? 'Süre 24 saatten uzun olamaz.' : `${measureNames[measure]} en fazla ${MEASURE_LIMITS[measure].toLocaleString('tr-TR')} olabilir.`;
+  }
+  return null;
+}
+
+export const formatDuration = (minutes: number) => {
+  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return hours ? `${hours} sa${rest ? ` ${rest} dk` : ''}` : `${minutes} dk`;
+};
+
+// "6.500 adım · 45 dk · 30 sayfa"; sıra her zaman aynıdır.
+export function formatMeasures(values: MeasureValues | undefined): string {
+  if (!values) return '';
+  return [
+    values.steps ? `${values.steps.toLocaleString('tr-TR')} adım` : null,
+    values.duration ? formatDuration(values.duration) : null,
+    values.pages ? `${values.pages.toLocaleString('tr-TR')} sayfa` : null,
+  ].filter(Boolean).join(' · ');
 }
 
 // Sayılı rutinlerin bugünkü sayısı. Yalnız bugünün sayısı geçerlidir; ertesi gün sıfırdan başlar.

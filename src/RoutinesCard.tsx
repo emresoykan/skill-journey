@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { habitStreak } from './game';
 import { useJourney } from './journey-state';
 import { displaySkill } from './mockAnalysis';
-import { availablePresets, formatTime, HABIT_XP, habitGoal, habitIcons, MAX_HABITS, MAX_TARGET, reminderTimes, type Habit, type HabitPreset } from './routines';
+import { availablePresets, formatMeasures, formatTime, HABIT_XP, habitGoal, habitIcons, habitMeasures, MAX_HABITS, MAX_TARGET, measureError, measureNames, parseAmount, reminderTimes, toMinutes, type Habit, type HabitPreset, type MeasureValues } from './routines';
 import { reminderNote, remindersSupported } from './reminders';
 import { MicButton } from './MicButton';
 
@@ -16,6 +16,7 @@ export function Routines() {
   const [editing, setEditing] = useState(false);
   const [focusAdd, setFocusAdd] = useState(false);
   const [title, setTitle] = useState('');
+  const [measuring, setMeasuring] = useState<string | null>(null);
   if (loading) return null;
   const managing = editing || habits.length === 0;
   const presets = availablePresets(habits);
@@ -49,19 +50,23 @@ export function Routines() {
       const { target, unit } = habitGoal(habit);
       const counted = target > 1;
       const count = habitCount(habit);
-      return <View key={habit.id} style={s.rowWrap}>
+      // Ölçülü rutin (ör. yürüyüşte adım ve süre): dokununca ölçü formu açılır, tik formdan atılır.
+      const measured = !counted && habitMeasures(habit).length > 0;
+      const summary = measured ? formatMeasures(routines.done.get(habit.id)?.measures) : '';
+      return <View key={habit.id}><View style={s.rowWrap}>
         <Pressable
-          accessibilityRole={counted ? 'button' : 'checkbox'}
-          accessibilityState={counted ? { disabled: busy || done } : { checked: done, disabled: busy }}
-          aria-checked={counted ? undefined : done}
-          accessibilityLabel={`${habit.title}${counted ? `, ${count}/${target} ${unit}${done ? '' : `, bir ${unit} ekle`}` : ''}${streak ? `, ${streak} günlük seri` : ''}`}
+          accessibilityRole={counted || measured ? 'button' : 'checkbox'}
+          accessibilityState={counted ? { disabled: busy || done } : measured ? { expanded: measuring === habit.id, disabled: busy } : { checked: done, disabled: busy }}
+          aria-checked={counted || measured ? undefined : done}
+          accessibilityLabel={`${habit.title}${counted ? `, ${count}/${target} ${unit}${done ? '' : `, bir ${unit} ekle`}` : ''}${measured ? `${done ? `, yapıldı${summary ? `: ${summary}` : ''}` : ''}, ölçüleri gir` : ''}${streak ? `, ${streak} günlük seri` : ''}`}
           disabled={busy || (counted && done)}
-          onPress={() => toggleHabit(habit)}
+          onPress={() => measured ? setMeasuring(measuring === habit.id ? null : habit.id) : toggleHabit(habit)}
           style={[s.row, done && s.rowDone]}
         >
           <Text style={s.icon}>{habit.icon}</Text>
           <View style={{ flex: 1 }}>
             <Text style={[s.habitTitle, done && s.habitTitleDone]}>{habit.title}</Text>
+            {summary ? <Text style={s.summary}>{summary}</Text> : null}
             <Text style={s.meta}>{counted ? `${count}/${target} ${unit} · ` : ''}{displaySkill(habit.skill)} · +{HABIT_XP} XP{streak ? `  ·  🔥 ${streak} gün` : ''}</Text>
             {counted ? <View style={s.dots}>
               {Array.from({ length: target }, (_, i) => <View key={i} style={[s.dot, i < count && s.dotOn]} />)}
@@ -73,6 +78,8 @@ export function Routines() {
         {counted && count > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`${habit.title}: bir ${unit} geri al`} hitSlop={6} disabled={busy} onPress={() => stepHabit(habit, -1)} style={s.minus}>
           <Text style={s.minusText}>−</Text>
         </Pressable> : null}
+      </View>
+      {measured && measuring === habit.id ? <MeasureForm habit={habit} onClose={() => setMeasuring(null)} /> : null}
       </View>;
     })}
 
@@ -112,6 +119,66 @@ export function Routines() {
     </View> : null}
     {habitError ? <Text style={s.error}>{habitError}</Text> : null}
     {habits.length && !editing ? <Reminder /> : null}
+  </View>;
+}
+
+// Ölçülü rutinde tik formu: adım, süre (dk ya da saat), sayfa. Boş bırakılan ölçü sorulmamış sayılır;
+// hepsi boşsa yalnız tik atılır. Bugün tikliyse ölçüler güncellenir ya da tik kaldırılır.
+function MeasureForm({ habit, onClose }: { habit: Habit; onClose: () => void }) {
+  const { busy, routines, logHabit, toggleHabit } = useJourney();
+  const done = routines.done.get(habit.id);
+  const measures = habitMeasures(habit);
+  const [steps, setSteps] = useState(done?.measures?.steps ? String(done.measures.steps) : '');
+  const [duration, setDuration] = useState(done?.measures?.duration ? String(done.measures.duration) : '');
+  const [durationUnit, setDurationUnit] = useState<'dk' | 'saat'>('dk');
+  const [pages, setPages] = useState(done?.measures?.pages ? String(done.measures.pages) : '');
+  const [error, setError] = useState('');
+
+  async function save() {
+    const values: MeasureValues = {};
+    const stepCount = measures.includes('steps') ? parseAmount(steps) : null;
+    const time = measures.includes('duration') ? parseAmount(duration, durationUnit === 'saat') : null;
+    const pageCount = measures.includes('pages') ? parseAmount(pages) : null;
+    if (stepCount !== null) values.steps = stepCount;
+    if (time !== null) values.duration = Number.isNaN(time) ? NaN : toMinutes(time, durationUnit);
+    if (pageCount !== null) values.pages = pageCount;
+    const problem = measureError(values);
+    if (problem) { setError(problem); return; }
+    if (await logHabit(habit, values)) onClose();
+  }
+  const field = (label: string, value: string, onChange: (text: string) => void, placeholder: string, decimal = false) =>
+    <TextInput accessibilityLabel={`${habit.title}: ${label}`} value={value} onChangeText={text => { onChange(text); setError(''); }} placeholder={placeholder} placeholderTextColor="#9AA6A8"
+      inputMode={decimal ? 'decimal' : 'numeric'} returnKeyType="done" onSubmitEditing={save} maxLength={8} style={s.fieldInput} />;
+
+  return <View style={s.measure}>
+    <Text style={s.measureTitle}>{done ? 'Bugünkü ölçüler' : 'Bugün ne kadar?'}</Text>
+    {measures.includes('steps') ? <View style={s.field}>
+      <Text style={s.fieldLabel}>{measureNames.steps}</Text>
+      {field(measureNames.steps, steps, setSteps, 'örn. 6500')}
+      <Text style={s.fieldUnit}>adım</Text>
+    </View> : null}
+    {measures.includes('duration') ? <View style={s.field}>
+      <Text style={s.fieldLabel}>{measureNames.duration}</Text>
+      {field(measureNames.duration, duration, setDuration, durationUnit === 'saat' ? 'örn. 1,5' : 'örn. 45', durationUnit === 'saat')}
+      <View style={s.unitToggle}>
+        {(['dk', 'saat'] as const).map(unit => <Pressable key={unit} accessibilityRole="radio" accessibilityState={{ selected: durationUnit === unit }} aria-checked={durationUnit === unit} onPress={() => { setDurationUnit(unit); setError(''); }} style={[s.unitPill, durationUnit === unit && s.unitPillOn]}>
+          <Text style={[s.unitText, durationUnit === unit && s.unitTextOn]}>{unit}</Text>
+        </Pressable>)}
+      </View>
+    </View> : null}
+    {measures.includes('pages') ? <View style={s.field}>
+      <Text style={s.fieldLabel}>{measureNames.pages}</Text>
+      {field(measureNames.pages, pages, setPages, 'örn. 30')}
+      <Text style={s.fieldUnit}>sayfa</Text>
+    </View> : null}
+    {error ? <Text accessibilityLiveRegion="polite" style={s.error}>{error}</Text> : <Text style={s.fieldNote}>Bilmediğini boş bırakabilirsin.</Text>}
+    <View style={s.measureActions}>
+      {done ? <Pressable accessibilityRole="button" disabled={busy} onPress={async () => { await toggleHabit(habit); onClose(); }}><Text style={s.removeText}>Tiki kaldır</Text></Pressable> : null}
+      <Pressable accessibilityRole="button" onPress={onClose}><Text style={s.cancel}>Vazgeç</Text></Pressable>
+      <Pressable accessibilityRole="button" disabled={busy} onPress={save} style={[s.saveButton, busy && { opacity: 0.45 }]}>
+        <Text style={s.saveText}>{done ? 'Güncelle' : `Kaydet · +${HABIT_XP} XP`}</Text>
+      </Pressable>
+    </View>
   </View>;
 }
 
@@ -237,6 +304,22 @@ const s = StyleSheet.create({
   circleDone: { backgroundColor: teal, borderColor: teal },
   circleMark: { color: 'white', fontSize: 16, fontWeight: '800' },
   plus: { color: teal, fontSize: 18, fontWeight: '800', lineHeight: 20 },
+  summary: { color: teal, fontSize: 13, fontWeight: '800', marginTop: 2 },
+  measure: { marginTop: 8, borderRadius: 14, borderWidth: 1, borderColor: '#BEDDD1', backgroundColor: '#F4FAF7', padding: 12, gap: 10 },
+  measureTitle: { color: '#182637', fontSize: 14, fontWeight: '800' },
+  field: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fieldLabel: { width: 48, color: '#657482', fontSize: 13, fontWeight: '700' },
+  fieldInput: { flex: 1, minWidth: 0, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', paddingHorizontal: 10, color: '#182637', fontSize: 15, fontWeight: '600' },
+  fieldUnit: { width: 92, color: '#657482', fontSize: 13, fontWeight: '700' },
+  fieldNote: { color: '#657482', fontSize: 12 },
+  unitToggle: { width: 92, flexDirection: 'row', borderRadius: 10, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', overflow: 'hidden' },
+  unitPill: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center' },
+  unitPillOn: { backgroundColor: teal },
+  unitText: { color: '#657482', fontSize: 13, fontWeight: '800' },
+  unitTextOn: { color: 'white' },
+  measureActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 16 },
+  saveButton: { borderRadius: 12, backgroundColor: teal, paddingHorizontal: 14, paddingVertical: 10 },
+  saveText: { color: 'white', fontSize: 13, fontWeight: '800' },
   dots: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E2E9E4' },
   dotOn: { backgroundColor: '#4FA3D9' },

@@ -1,7 +1,7 @@
 // Günlük rutinlerin tik, ilerleme ve ad doğrulama kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { availablePresets, dayKey, formatTime, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
+import { availablePresets, dayKey, formatMeasures, formatTime, habitMeasures, measureError, parseAmount, toMinutes, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
 
 const now = new Date(2026, 9, 21, 15, 0);
 const yesterday = new Date(2026, 9, 20, 9, 0);
@@ -106,4 +106,37 @@ test('bugün tamamlanmış sayılı rutin hedefte görünür, hedefi aşmaz', ()
   const water = { ...habit('h1', 'Su iç'), target: 8, unit: 'bardak' };
   assert.equal(habitCountToday({}, water, true, now), 8);
   assert.equal(habitCountToday({ h1: { day: dayKey(now), count: 12 } }, water, false, now), 8);
+});
+
+test('ölçüler: hazır öneriden gelir, kendi yazdığın rutinde yoktur', () => {
+  assert.deepEqual(habitMeasures(habit('h1', 'Yürüyüş yap')), ['steps', 'duration']);
+  assert.deepEqual(habitMeasures(habit('h1', '20 dk kitap oku')), ['duration', 'pages']);
+  assert.deepEqual(habitMeasures(habit('h1', 'Spor yap')), ['duration']);
+  assert.deepEqual(habitMeasures(habit('h1', 'Bitki sula')), []);
+});
+
+test('sayı okuma: binlik ayırıcı, saatte ondalık, boş ve geçersiz', () => {
+  assert.equal(parseAmount('6.500'), 6500);
+  assert.equal(parseAmount(' 6500 '), 6500);
+  assert.equal(parseAmount(''), null);
+  assert.ok(Number.isNaN(parseAmount('abc')));
+  assert.ok(Number.isNaN(parseAmount('0')));
+  assert.equal(parseAmount('1,5', true), 1.5);
+  assert.equal(parseAmount('1.5', true), 1.5);
+  assert.equal(toMinutes(1.5, 'saat'), 90);
+  assert.equal(toMinutes(45, 'dk'), 45);
+});
+
+test('ölçü sınırları yazım hatasını yakalar', () => {
+  assert.equal(measureError({ steps: 6500, duration: 45 }), null);
+  assert.match(measureError({ duration: 25 * 60 }), /24 saat/);
+  assert.match(measureError({ steps: 250000 }), /Adım en fazla 100\.000/);
+  assert.match(measureError({ pages: NaN }), /Sayfa için geçerli/);
+});
+
+test('ölçüler okunur biçimde yazılır', () => {
+  assert.equal(formatMeasures({ steps: 6500, duration: 45 }), '6.500 adım · 45 dk');
+  assert.equal(formatMeasures({ pages: 30, duration: 90 }), '1 sa 30 dk · 30 sayfa');
+  assert.equal(formatMeasures({ duration: 120 }), '2 sa');
+  assert.equal(formatMeasures(undefined), '');
 });
