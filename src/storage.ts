@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Analysis, SkillAward } from './mockAnalysis';
-import type { Habit } from './routines';
+import type { Habit, HabitCounts } from './routines';
 import type { Learning, Reviews } from './learning';
 
 // bonusXp: günlük görevden gelen ek XP; beceriye değil toplam XP'ye eklenir.
@@ -10,6 +10,7 @@ export type Entry = Analysis & { id: string; createdAt: string; description: str
 const KEY = 'skill-journey:entries:v1';
 const HABITS_KEY = 'skill-journey:habits:v1';
 const REVIEWS_KEY = 'skill-journey:reviews:v1';
+const HABIT_COUNTS_KEY = 'skill-journey:habit-counts:v1';
 
 export async function loadEntries(): Promise<Entry[]> {
   const stored = await AsyncStorage.getItem(KEY);
@@ -40,7 +41,8 @@ export async function loadHabits(): Promise<Habit[]> {
   const parsed: unknown = JSON.parse(stored);
   if (!Array.isArray(parsed)) return [];
   return parsed.filter((habit): habit is Habit => !!habit && typeof habit === 'object'
-    && ['id', 'title', 'icon', 'skill', 'createdAt'].every(key => typeof habit[key] === 'string'));
+    && ['id', 'title', 'icon', 'skill', 'createdAt'].every(key => typeof habit[key] === 'string'))
+    .map(habit => ({ ...habit, target: Number.isInteger(habit.target) && habit.target! >= 1 ? habit.target : undefined, unit: typeof habit.unit === 'string' && habit.unit.trim() ? habit.unit : undefined }));
 }
 
 export async function saveHabits(habits: Habit[]): Promise<void> {
@@ -58,4 +60,17 @@ export async function loadReviews(): Promise<Reviews> {
 
 export async function saveReviews(reviews: Reviews): Promise<void> {
   await AsyncStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
+}
+
+export async function loadHabitCounts(): Promise<HabitCounts> {
+  const stored = await AsyncStorage.getItem(HABIT_COUNTS_KEY);
+  if (!stored) return {};
+  const parsed: unknown = JSON.parse(stored);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return Object.fromEntries(Object.entries(parsed).filter(([, state]) =>
+    !!state && typeof state.day === 'string' && Number.isInteger(state.count) && state.count >= 0));
+}
+
+export async function saveHabitCounts(counts: HabitCounts): Promise<void> {
+  await AsyncStorage.setItem(HABIT_COUNTS_KEY, JSON.stringify(counts));
 }

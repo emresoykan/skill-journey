@@ -1,7 +1,7 @@
 // Günlük rutinlerin tik, ilerleme ve ad doğrulama kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { availablePresets, formatTime, habitAnalysis, habitEntriesToday, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
+import { availablePresets, dayKey, formatTime, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
 
 const now = new Date(2026, 9, 21, 15, 0);
 const yesterday = new Date(2026, 9, 20, 9, 0);
@@ -87,4 +87,23 @@ test('saat geçtiyse ilk hatırlatma yarın', () => {
 test('saat iki haneli biçimlenir', () => {
   assert.equal(formatTime(7, 30), '07:30');
   assert.equal(formatTime(20, 0), '20:00');
+});
+
+test('günlük hedef: rutinin kendi hedefi, yoksa aynı adlı hazır öneri, o da yoksa tek tik', () => {
+  assert.deepEqual(habitGoal({ ...habit('h1', 'Su iç'), target: 5, unit: 'bardak' }), { target: 5, unit: 'bardak' });
+  assert.deepEqual(habitGoal(habit('h1', '  su İÇ ')), { target: 8, unit: 'bardak' });
+  assert.deepEqual(habitGoal(habit('h1', 'Yürüyüş yap')), { target: 1, unit: 'kez' });
+});
+
+test('sayılı rutinde yalnız bugünün sayısı geçerli', () => {
+  const water = { ...habit('h1', 'Su iç'), target: 8, unit: 'bardak' };
+  assert.equal(habitCountToday({ h1: { day: dayKey(now), count: 3 } }, water, false, now), 3);
+  assert.equal(habitCountToday({ h1: { day: dayKey(yesterday), count: 6 } }, water, false, now), 0);
+  assert.equal(habitCountToday({}, water, false, now), 0);
+});
+
+test('bugün tamamlanmış sayılı rutin hedefte görünür, hedefi aşmaz', () => {
+  const water = { ...habit('h1', 'Su iç'), target: 8, unit: 'bardak' };
+  assert.equal(habitCountToday({}, water, true, now), 8);
+  assert.equal(habitCountToday({ h1: { day: dayKey(now), count: 12 } }, water, false, now), 8);
 });
