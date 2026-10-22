@@ -225,7 +225,8 @@ const s = StyleSheet.create({
   editLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconButton: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
   iconButtonOn: { borderColor: teal },
-  editInput: { flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', paddingHorizontal: 10, color: '#182637', fontSize: 15, fontWeight: '600' },
+  // minWidth 0: web'de <input> kendi varsayılan genişliğinin altına küçülmez; yoksa satırdaki düğmeler kartın dışına taşar.
+  editInput: { flex: 1, minWidth: 0, height: 44, borderRadius: 10, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', paddingHorizontal: 10, color: '#182637', fontSize: 15, fontWeight: '600' },
   removePill: { borderRadius: 10, backgroundColor: '#FFF5F3', paddingHorizontal: 10, paddingVertical: 10 },
   iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   iconChoice: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#E2E9E4', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
@@ -237,7 +238,7 @@ const s = StyleSheet.create({
   cancel: { color: '#657482', fontSize: 12, fontWeight: '700' },
   manage: { marginTop: 14 },
   inputRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  input: { flex: 1, height: 46, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, color: '#182637', fontSize: 14, backgroundColor: '#FAFBF9' },
+  input: { flex: 1, minWidth: 0, height: 46, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, color: '#182637', fontSize: 14, backgroundColor: '#FAFBF9' },
   add: { height: 46, paddingHorizontal: 16, borderRadius: 12, backgroundColor: teal, alignItems: 'center', justifyContent: 'center' },
   addText: { color: 'white', fontSize: 14, fontWeight: '800' },
   presetLabel: { color: '#657482', fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 14, marginBottom: 8 },

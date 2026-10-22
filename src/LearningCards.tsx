@@ -157,7 +157,7 @@ const s = StyleSheet.create({
   countDone: { color: teal, backgroundColor: '#DDF1E9' },
   sub: { color: '#657482', fontSize: 13, lineHeight: 19, marginTop: 8 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  input: { flex: 1, height: 48, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9' },
+  input: { flex: 1, minWidth: 0, height: 48, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9' },
   primary: { height: 48, borderRadius: 12, backgroundColor: teal, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   primaryText: { color: 'white', fontSize: 15, fontWeight: '800' },
   error: { color: '#B34242', fontSize: 12, marginTop: 8 },

@@ -89,7 +89,7 @@ const s = StyleSheet.create({
   segment: { flex: 1, height: 7, borderRadius: 4, backgroundColor: '#E2E9E4' },
   segmentOn: { backgroundColor: gold },
   inputRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  input: { flex: 1, height: 50, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9' },
+  input: { flex: 1, minWidth: 0, height: 50, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9' },
   add: { width: 50, height: 50, borderRadius: 14, backgroundColor: teal, alignItems: 'center', justifyContent: 'center' },
   addText: { color: 'white', fontSize: 28, fontWeight: '700', marginTop: -2 },
   error: { color: '#B34242', fontSize: 12, marginTop: 8 },
