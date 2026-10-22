@@ -32,6 +32,8 @@ export default function Layout() {
       tabBarInactiveTintColor: '#657482',
       tabBarStyle: { backgroundColor: 'white', borderTopColor: '#E2E9E4' },
       tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
+      // Simge alanı 28 → 24 px: 49 px'lik çubukta 12 px kalın etikete yer kalsın (yoksa etiketin altı kesilir).
+      tabBarIconStyle: { height: 24 },
       tabBarHideOnKeyboard: true,
     }}>
       <Tabs.Screen name="index" options={{ title: 'Bugün', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 23 }}>✦</Text> }} />
