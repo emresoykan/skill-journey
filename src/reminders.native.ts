@@ -1,33 +1,20 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { DEFAULT_REMINDER, type ReminderSettings } from './routines';
+import { reminderPlan, type Habit, type ReminderSettings } from './routines';
+import type { Entry } from './storage';
 
-// Telefon sürümü. Web sürümü reminders.ts'te: expo-notifications web'i desteklemez
-// ve içe aktarıldığında konsola uyarı basar, bu yüzden web paketine hiç girmez.
+// Telefon sürümü: bildirimler telefonun kendisinde zamanlanır, sunucu gerekmez.
+// Web sürümü reminders.ts'te (web push); Metro platforma göre birini seçer.
+export { loadReminder, saveReminder } from './reminderStore';
 export const remindersSupported = true;
+export const reminderNote: string | null = null;
 
-const KEY = 'skill-journey:reminder:v1';
 const CHANNEL = 'reminders';
 
 // Uygulama açıkken gelen hatırlatma da görünsün.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
-
-export async function loadReminder(): Promise<ReminderSettings> {
-  const stored = await AsyncStorage.getItem(KEY);
-  if (!stored) return DEFAULT_REMINDER;
-  const parsed: Partial<ReminderSettings> = JSON.parse(stored);
-  const valid = typeof parsed.enabled === 'boolean'
-    && Number.isInteger(parsed.hour) && parsed.hour! >= 0 && parsed.hour! < 24
-    && Number.isInteger(parsed.minute) && parsed.minute! >= 0 && parsed.minute! < 60;
-  return valid ? parsed as ReminderSettings : DEFAULT_REMINDER;
-}
-
-export async function saveReminder(settings: ReminderSettings): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(settings));
-}
 
 const isAllowed = (status: Notifications.NotificationPermissionsStatus) =>
   status.granted || status.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
@@ -39,16 +26,31 @@ export async function ensureReminderPermission(): Promise<boolean> {
   return isAllowed(await Notifications.requestPermissionsAsync());
 }
 
-// Uygulamanın kurduğu tek bildirim türü bu olduğu için önce hepsi silinip plan baştan kurulur.
-export async function applyReminderPlan(plan: { date: Date; body: string }[]): Promise<void> {
+async function ensureChannel() {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(CHANNEL, { name: 'Rutin hatırlatıcıları', importance: Notifications.AndroidImportance.DEFAULT });
   }
+}
+
+// Önümüzdeki günlerin hatırlatmaları baştan kurulur. Uygulamanın kurduğu tek bildirim
+// türü bu olduğu için önce hepsi silinir.
+export async function syncReminders(settings: ReminderSettings, habits: Habit[], entries: Entry[]): Promise<void> {
+  await ensureChannel();
   await Notifications.cancelAllScheduledNotificationsAsync();
-  for (const item of plan) {
+  for (const item of reminderPlan(settings, habits, entries)) {
     await Notifications.scheduleNotificationAsync({
       content: { title: 'Rutin zamanı', body: item.body },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: item.date, channelId: CHANNEL },
     });
   }
+}
+
+export async function sendTestReminder(): Promise<string> {
+  if (!(await ensureReminderPermission())) return 'Bildirim izni yok. Telefonun Ayarlar > Bildirimler bölümünden açabilirsin.';
+  await ensureChannel();
+  await Notifications.scheduleNotificationAsync({
+    content: { title: 'Skill Journey', body: 'Bildirimler çalışıyor 🎉 Rutin hatırlatmaların böyle gelecek.' },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, channelId: CHANNEL },
+  });
+  return 'Test bildirimi 5 saniye içinde gelecek.';
 }

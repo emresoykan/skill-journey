@@ -5,7 +5,8 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*"],
+    // push-worker/.wrangler: Wrangler'ın yerel geliştirmede ürettiği geçici paketler.
+    ignores: ["dist/*", "push-worker/.wrangler/**", "push-worker/node_modules/**"],
   },
   {
     // scripts/ altındaki yardımcılar uygulamada değil, Node ile çalışır.

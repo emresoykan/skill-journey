@@ -4,7 +4,7 @@ import { habitStreak } from './game';
 import { useJourney } from './journey-state';
 import { displaySkill } from './mockAnalysis';
 import { availablePresets, formatTime, HABIT_XP, MAX_HABITS, reminderTimes, type HabitPreset } from './routines';
-import { remindersSupported } from './reminders';
+import { reminderNote, remindersSupported } from './reminders';
 
 const teal = '#166B65';
 const gold = '#F5C45A';
@@ -98,10 +98,10 @@ export function Routines() {
   </View>;
 }
 
-// Günde bir rutin hatırlatması; yalnız telefon uygulamasında çalışır.
+// Günde bir rutin hatırlatması. Telefonda yerel bildirim, web'de push-worker üzerinden.
 function Reminder() {
-  const { reminder, setReminder, reminderError } = useJourney();
-  if (!remindersSupported) return <Text style={s.reminderNote}>🔔 Rutin hatırlatıcıları telefon uygulamasında çalışır.</Text>;
+  const { reminder, setReminder, reminderError, reminderNotice, testReminder } = useJourney();
+  if (!remindersSupported) return <Text style={s.reminderNote}>{reminderNote}</Text>;
   return <View style={s.reminder}>
     <View style={s.reminderHead}>
       <Text style={s.reminderTitle}>🔔 Hatırlatıcı</Text>
@@ -117,6 +117,8 @@ function Reminder() {
         })}
       </View>
       <Text style={s.reminderNote}>Her gün saat {formatTime(reminder.hour, reminder.minute)} · O günün rutinleri bitmişse hatırlatma gelmez.</Text>
+      <Pressable accessibilityRole="button" onPress={testReminder} style={s.testButton}><Text style={s.link}>Test bildirimi gönder</Text></Pressable>
+      {reminderNotice ? <Text style={s.reminderNote}>{reminderNotice}</Text> : null}
     </> : null}
     {reminderError ? <Text style={s.error}>{reminderError}</Text> : null}
   </View>;
@@ -188,6 +190,7 @@ const s = StyleSheet.create({
   timeOn: { backgroundColor: teal, borderColor: teal },
   timeText: { color: '#182637', fontSize: 13, fontWeight: '700' },
   timeTextOn: { color: 'white' },
+  testButton: { alignSelf: 'flex-start', marginTop: 10, paddingVertical: 4 },
   streakRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EEF2EE' },
   week: { flexDirection: 'row', gap: 5, marginTop: 6 },
   day: { width: 18, height: 18, borderRadius: 5, backgroundColor: '#E2E9E4' },

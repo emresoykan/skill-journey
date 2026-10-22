@@ -1,0 +1,21 @@
+{
+  // Skill Journey web push sunucusu. Kurulum: push-worker/README.md
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "skill-journey-push",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-21",
+  "kv_namespaces": [
+    // Abonelikler ve hatırlatma saatleri. id, `npx wrangler kv namespace create SUBS` çıktısından gelir.
+    { "binding": "SUBS", "id": "ec0325be4f034adf9b6dd02e56ce7363" }
+  ],
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "vars": {
+    // Gizli değildir. Özel VAPID anahtarı burada değil, `wrangler secret` ile saklanır.
+    "ALLOWED_ORIGINS": "https://emresoykan.github.io,http://localhost:8082",
+    "APP_URL": "https://emresoykan.github.io/skill-journey/",
+    "ICON_URL": "https://emresoykan.github.io/skill-journey/apple-touch-icon.png",
+    "VAPID_PUBLIC_KEY": "BMWOzY69APcqErozF2U9zAmyDJKMWgQkJ2p-oSf4USdvYYz6Is7F2AMrLgW3mM3G6AJyrtrbwd3BlYERqocPLh4"
+  }
+}
