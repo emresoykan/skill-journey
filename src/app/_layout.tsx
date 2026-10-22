@@ -15,15 +15,13 @@ import { prepareSounds } from '../sounds';
 const touchIcon = Platform.OS === 'web' ? (require('../../assets/apple-touch-icon.png') as { uri: string }).uri : undefined;
 // Manifest (public/) "Ana Ekrana Ekle"yi tam ekran web uygulamasına çevirir; iPhone'da web push için gerekir.
 const baseUrl = (Constants.expoConfig?.experiments as { baseUrl?: string } | undefined)?.baseUrl ?? '';
-// Ana ekrandan açılan web uygulaması (iPhone'da Safari çubukları yok): sekme etiketleri ana ekran çizgisine yapışmasın.
-const standalone = Platform.OS === 'web' && typeof window !== 'undefined'
-  && (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true);
 
 export default function Layout() {
   useEffect(prepareSounds, []);
   const insets = useSafeAreaInsets();
-  // iOS bazen alt güvenli alanı 0 bildirir; en az 20 px boşluk bırakılır (çubuk 49 px + boşluk).
-  const homeBar = standalone ? Math.max(insets.bottom, 20) : null;
+  // Web'de (iPhone ana ekran uygulaması dahil) sekme etiketleri ana ekran çizgisine yapışmasın: iOS alt güvenli alanı
+  // 0 bildirebildiği için her zaman en az 20 px boşluk bırakılır (çubuk 49 px + boşluk). Telefon uygulamasında varsayılan kalır.
+  const homeBar = Platform.OS === 'web' ? Math.max(insets.bottom, 20) : null;
   return <JourneyProvider>
     {Platform.OS === 'web' ? <Head>
       <title>Skill Journey</title>
