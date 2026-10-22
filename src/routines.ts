@@ -3,15 +3,18 @@ import type { Analysis } from './mockAnalysis';
 import type { Entry } from './storage';
 
 // target: günde kaç kez (ör. 8 bardak su); yoksa tek tik. unit: sayının birimi ("bardak").
-// measures: tik atarken sorulan ölçüler (ör. yürüyüşte adım ve süre).
+// measures: tik atarken sorulan ölçüler (ör. yürüyüşte adım ve süre). goalMinutes: süre ölçülü rutinde günlük süre hedefi.
 export type Measure = 'steps' | 'duration' | 'pages';
 export type MeasureValues = Partial<Record<Measure, number>>;
-export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string; target?: number; unit?: string; measures?: Measure[] };
+export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string; target?: number; unit?: string; measures?: Measure[]; goalMinutes?: number };
 export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill' | 'target' | 'unit' | 'measures'>;
 
 export const HABIT_XP = 10;
 export const MAX_HABITS = 12;
 export const MAX_TARGET = 20;
+// Süre hedefi 15 dakikalık adımlarla, en fazla 10 saat.
+export const GOAL_STEP_MINUTES = 15;
+export const MAX_GOAL_MINUTES = 600;
 
 export const habitPresets: HabitPreset[] = [
   { icon: '💧', title: 'Su iç', skill: 'Self Care', target: 8, unit: 'bardak' },

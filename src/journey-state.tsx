@@ -2,7 +2,7 @@ import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
 import { loadEntries, loadHabitCounts, loadHabits, loadReviews, saveEntries, saveHabitCounts, saveHabits, saveReviews, type Entry } from './storage';
 import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
-import { dayKey, DEFAULT_REMINDER, formatMeasures, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type MeasureValues, type ReminderSettings } from './routines';
+import { dayKey, DEFAULT_REMINDER, formatMeasures, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_GOAL_MINUTES, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type MeasureValues, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
 import { capAwards, correctSkillAward } from './skillCorrections';
 import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
@@ -307,7 +307,7 @@ function useJourneyState() {
 
   // Ad, simge ya da günlük hedef değişir. Ad değişince beceri yeniden belirlenir: hazır öneriyle aynıysa
   // onun becerisi, değilse addan çıkarılan beceri. Geçmiş tikler eski adıyla kalır.
-  async function updateHabit(id: string, changes: { title?: string; icon?: string; target?: number }): Promise<boolean> {
+  async function updateHabit(id: string, changes: { title?: string; icon?: string; target?: number; goalMinutes?: number }): Promise<boolean> {
     const current = habits.find(habit => habit.id === id);
     if (!current || busy) return false;
     const title = changes.title?.trim().replace(/\s+/g, ' ') ?? current.title;
@@ -323,7 +323,9 @@ function useJourneyState() {
       const skill = !renamed ? current.skill : preset?.skill ?? (await analyzeExperience(title)).skill;
       // Hedef değişince birim korunur (hazır önerininki dahil: "Su iç" → bardak).
       const goal = changes.target === undefined ? null : { target: Math.max(1, Math.min(MAX_TARGET, changes.target)), unit: habitGoal(current).unit };
-      const updated = habits.map(habit => habit.id === id ? { ...habit, title, skill, icon: changes.icon ?? habit.icon, ...goal } : habit);
+      // Süre hedefi 0 olunca kalkar.
+      const minutes = changes.goalMinutes === undefined ? null : { goalMinutes: changes.goalMinutes > 0 ? Math.min(MAX_GOAL_MINUTES, changes.goalMinutes) : undefined };
+      const updated = habits.map(habit => habit.id === id ? { ...habit, title, skill, icon: changes.icon ?? habit.icon, ...goal, ...minutes } : habit);
       await saveHabits(updated);
       setHabits(updated);
       // Bugünkü sayı yeni hedefe göre yeniden değerlendirilir: hedef düşüp sayıya inince tik atılır,

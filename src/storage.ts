@@ -50,6 +50,7 @@ export async function loadHabits(): Promise<Habit[]> {
   return parsed.filter((habit): habit is Habit => !!habit && typeof habit === 'object'
     && ['id', 'title', 'icon', 'skill', 'createdAt'].every(key => typeof habit[key] === 'string'))
     .map(habit => ({ ...habit, target: Number.isInteger(habit.target) && habit.target! >= 1 ? habit.target : undefined, unit: typeof habit.unit === 'string' && habit.unit.trim() ? habit.unit : undefined,
+      goalMinutes: Number.isInteger(habit.goalMinutes) && habit.goalMinutes! > 0 ? habit.goalMinutes : undefined,
       measures: Array.isArray(habit.measures) ? habit.measures.filter((m: unknown): m is Measure => MEASURES.includes(m as Measure)) : undefined }));
 }
 
