@@ -5,6 +5,7 @@ import { useJourney } from './journey-state';
 import { displaySkill } from './mockAnalysis';
 import { availablePresets, formatTime, HABIT_XP, habitIcons, MAX_HABITS, reminderTimes, type Habit, type HabitPreset } from './routines';
 import { reminderNote, remindersSupported } from './reminders';
+import { MicButton } from './MicButton';
 
 const teal = '#166B65';
 const gold = '#F5C45A';
@@ -83,6 +84,7 @@ export function Routines() {
           onChangeText={value => { setTitle(value); setHabitError(''); }}
           style={s.input}
         />
+        <MicButton value={title} onChangeText={value => { setTitle(value); setHabitError(''); }} size={46} />
         <Pressable accessibilityRole="button" accessibilityLabel="Rutin ekle" disabled={busy || !title.trim()} onPress={submit} style={[s.add, (busy || !title.trim()) && { opacity: 0.45 }]}>
           <Text style={s.addText}>Ekle</Text>
         </Pressable>
@@ -109,11 +111,12 @@ function HabitEditRow({ habit }: { habit: Habit }) {
   const [picking, setPicking] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  // Klavyeden çıkınca (Enter dahil) kaydedilir; geçersizse eski ada döner.
-  async function saveTitle() {
-    if (!title.trim() || title.trim() === habit.title) { setTitle(habit.title); return; }
-    if (!(await updateHabit(habit.id, { title }))) setTitle(habit.title);
+  // Klavyeden çıkınca (Enter dahil) ya da sesle söylenince kaydedilir; geçersizse eski ada döner.
+  async function renameTo(next: string) {
+    if (!next.trim() || next.trim() === habit.title) { setTitle(habit.title); return; }
+    if (!(await updateHabit(habit.id, { title: next }))) setTitle(habit.title);
   }
+  const saveTitle = () => renameTo(title);
 
   return <View style={s.editRow}>
     <View style={s.editLine}>
@@ -121,6 +124,7 @@ function HabitEditRow({ habit }: { habit: Habit }) {
         <Text style={s.icon}>{habit.icon}</Text>
       </Pressable>
       <TextInput accessibilityLabel={`Rutin adı: ${habit.title}`} value={title} onChangeText={setTitle} onBlur={saveTitle} returnKeyType="done" maxLength={60} style={s.editInput} />
+      <MicButton value="" onChangeText={setTitle} onFinal={renameTo} size={44} />
       <Pressable accessibilityRole="button" accessibilityLabel={`Rutini kaldır: ${habit.title}`} onPress={() => setConfirming(true)} style={s.removePill}>
         <Text style={s.removeText}>Kaldır</Text>
       </Pressable>

@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { dayLabel } from './game';
 import { useJourney } from './journey-state';
+import { MicButton } from './MicButton';
 import { isMastered, LEARN_XP, REVIEW_INTERVALS, REVIEW_XP, reviewEntryToday, reviewStateOf, stageIcon } from './learning';
 import type { Entry } from './storage';
 
@@ -33,7 +34,7 @@ export function LearnCard({ children }: { children?: ReactNode }) {
       <Text style={s.xpChip}>+{LEARN_XP} XP</Text>
     </View>
     <Text style={s.sub}>Bir kavram, konu ya da kelime ve anlamı. Unutmaman için ara ara sana soracağız.</Text>
-    <TextInput
+    <View style={s.fieldRow}><TextInput
       accessibilityLabel="Kavram ya da kelime"
       placeholder="Kavram ya da kelime, örn. Serendipity"
       placeholderTextColor="#9AA6A8"
@@ -44,8 +45,8 @@ export function LearnCard({ children }: { children?: ReactNode }) {
       value={term}
       onChangeText={value => { setTerm(value); setLearnError(''); }}
       style={s.input}
-    />
-    <TextInput
+    /><MicButton value={term} onChangeText={value => { setTerm(value); setLearnError(''); }} size={48} /></View>
+    <View style={s.fieldRow}><TextInput
       ref={meaningInput}
       accessibilityLabel="Anlamı"
       placeholder="Anlamı, örn. Şans eseri güzel bir keşif"
@@ -56,7 +57,7 @@ export function LearnCard({ children }: { children?: ReactNode }) {
       value={meaning}
       onChangeText={value => { setMeaning(value); setLearnError(''); }}
       style={s.input}
-    />
+    /><MicButton value={meaning} onChangeText={value => { setMeaning(value); setLearnError(''); }} size={48} /></View>
     <Pressable accessibilityRole="button" disabled={busy || !ready} onPress={submit} style={[s.primary, (busy || !ready) && { opacity: 0.45 }]}>
       <Text style={s.primaryText}>Öğrendiklerime ekle</Text>
     </Pressable>
@@ -155,7 +156,8 @@ const s = StyleSheet.create({
   countChip: { color: '#4B3FA0', backgroundColor: '#E6E0FF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12, fontWeight: '800', overflow: 'hidden' },
   countDone: { color: teal, backgroundColor: '#DDF1E9' },
   sub: { color: '#657482', fontSize: 13, lineHeight: 19, marginTop: 8 },
-  input: { height: 48, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9', marginTop: 10 },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  input: { flex: 1, height: 48, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9' },
   primary: { height: 48, borderRadius: 12, backgroundColor: teal, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   primaryText: { color: 'white', fontSize: 15, fontWeight: '800' },
   error: { color: '#B34242', fontSize: 12, marginTop: 8 },

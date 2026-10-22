@@ -11,6 +11,7 @@ import { PlayerCard } from './PlayerCard';
 import { DailyQuest } from './DailyQuest';
 import { RewardCard, isSpecialReward } from './RewardCard';
 import { TodayLog } from './TodayLog';
+import { MicButton } from './MicButton';
 import { LearnCard, LearningNotebook, ReviewCard } from './LearningCards';
 import { RoutineStreaks, Routines } from './RoutinesCard';
 import { Badges } from './Badges';
@@ -57,7 +58,10 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         </> : null}
         {section === 'memories' ? <>
         <Text style={s.section}>Anılarını bul</Text>
-        <TextInput accessibilityLabel="Anılarda ara" placeholder="Kayıt veya beceri ara..." placeholderTextColor="#657482" value={query} onChangeText={setQuery} style={[s.editInput, { minHeight: 48, fontSize: 15, color: '#182637', backgroundColor: 'white', marginBottom: 12 }]} />
+        <View style={s.searchRow}>
+          <TextInput accessibilityLabel="Anılarda ara" placeholder="Kayıt veya beceri ara..." placeholderTextColor="#657482" value={query} onChangeText={setQuery} style={[s.editInput, { flex: 1, minHeight: 48, fontSize: 15, color: '#182637', backgroundColor: 'white', marginBottom: 0 }]} />
+          <MicButton value="" onChangeText={setQuery} size={48} />
+        </View>
         {query ? <Pressable accessibilityRole="button" onPress={() => setQuery('')}><Text style={[s.editText, { marginBottom: 12 }]}>Aramayı temizle · {visibleEntries.length} kayıt bulundu</Text></Pressable> : null}
         {!loading && !query ? <PastSelf entries={entries} /> : null}
         <LearningNotebook query={query} />
@@ -104,7 +108,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F8F4' }, dayGroup: { marginBottom: 14 }, dayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, marginTop: 4 }, dayTitle: { color: '#182637', fontSize: 15, fontWeight: '800' }, page: { width: '100%', maxWidth: 680, alignSelf: 'center', padding: 22, paddingBottom: 55 },
+  safe: { flex: 1, backgroundColor: '#F7F8F4' }, searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }, dayGroup: { marginBottom: 14 }, dayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, marginTop: 4 }, dayTitle: { color: '#182637', fontSize: 15, fontWeight: '800' }, page: { width: '100%', maxWidth: 680, alignSelf: 'center', padding: 22, paddingBottom: 55 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }, headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 }, soundButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EEF2EE', alignItems: 'center', justifyContent: 'center' }, soundIcon: { fontSize: 16 }, brand: { color: '#182637', fontSize: 19, fontWeight: '800' }, levelPill: { color: teal, backgroundColor: '#DDF1E9', padding: 9, borderRadius: 16, fontSize: 11, fontWeight: '800' },
   hero: { backgroundColor: '#DDF1E9', borderRadius: 26, padding: 24, marginBottom: 26 }, eyebrow: { color: teal, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 }, title: { color: '#182637', fontSize: 34, lineHeight: 39, fontWeight: '800', letterSpacing: -1 }, sub: { color: '#657482', fontSize: 14, lineHeight: 21, marginTop: 10, marginBottom: 22 }, row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, progressLabel: { color: teal, fontSize: 12, fontWeight: '800', marginBottom: 9 }, track: { backgroundColor: '#BEDDD1', height: 9, borderRadius: 9, overflow: 'hidden' }, fill: { backgroundColor: teal, height: 9 }, foot: { color: '#657482', fontSize: 11, marginTop: 9 },
   section: { color: '#182637', fontSize: 20, fontWeight: '800', marginBottom: 12 }, card: { backgroundColor: 'white', borderColor: '#E2E9E4', borderWidth: 1, borderRadius: 21, padding: 18, marginBottom: 24 }, label: { color: '#182637', fontSize: 14, fontWeight: '800' }, input: { minHeight: 115, marginTop: 13, color: '#182637', fontSize: 15, lineHeight: 22, padding: 0 }, inputFoot: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#E2E9E4', paddingTop: 12, marginTop: 8, marginBottom: 14 }, muted: { color: '#657482', fontSize: 11 }, error: { color: '#B34242', fontSize: 12, marginBottom: 10 }, button: { backgroundColor: teal, borderRadius: 14, height: 49, alignItems: 'center', justifyContent: 'center' }, buttonText: { color: 'white', fontSize: 14, fontWeight: '800' }, note: { textAlign: 'center', color: '#657482', fontSize: 10, marginTop: 11 },

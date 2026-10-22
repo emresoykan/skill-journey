@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { entryXp } from './game';
 import { useJourney } from './journey-state';
+import { MicButton } from './MicButton';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
@@ -22,6 +23,7 @@ export function EntryEditForm({ entry }: { entry: Entry }) {
     <Text style={s.muted}>{`${editDraft.length}/1000 · Düzenleme becerileri yeniler ama XP'yi artırmaz.`}</Text>
     {editError ? <Text style={s.error}>{editError}</Text> : null}
     <View style={s.actions}>
+      <View style={{ flex: 1 }}><MicButton value={editDraft} onChangeText={value => { setEditDraft(value); setEditError(''); }} size={40} /></View>
       <Pressable accessibilityRole="button" disabled={busy} onPress={cancelEditing}><Text style={s.cancel}>Vazgeç</Text></Pressable>
       <Pressable accessibilityRole="button" disabled={busy} onPress={() => saveEdit(entry.id)}><Text style={s.primary}>Kaydet</Text></Pressable>
     </View>

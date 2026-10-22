@@ -4,6 +4,7 @@ import { DAILY_GOAL, entryXp } from './game';
 import { displaySkill } from './mockAnalysis';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { useJourney } from './journey-state';
+import { MicButton } from './MicButton';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
@@ -50,6 +51,7 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
         onChangeText={onChangeDraft}
         style={s.input}
       />
+      <MicButton value={draft} onChangeText={onChangeDraft} />
       <Pressable accessibilityRole="button" accessibilityLabel="Ekle" disabled={disabled || busy || !draft.trim()} onPress={onAdd} style={[s.add, (disabled || busy || !draft.trim()) && { opacity: 0.45 }]}>
         {busy ? <ActivityIndicator color="white" /> : <Text style={s.addText}>+</Text>}
       </Pressable>
