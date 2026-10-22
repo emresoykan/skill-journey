@@ -13,7 +13,7 @@ import { RewardCard, isSpecialReward } from './RewardCard';
 import { TodayLog } from './TodayLog';
 import { MicButton } from './MicButton';
 import { LearnCard, LearningNotebook, ReviewCard } from './LearningCards';
-import { RoutineStreaks, Routines } from './RoutinesCard';
+import { RoutineStreaks, Routines, WeeklyTotals } from './RoutinesCard';
 import { Badges } from './Badges';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { Confetti } from './Confetti';
@@ -40,6 +40,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         <PlayerCard totalXp={totalXp} streak={streak} />
         {!loading ? <Badges entries={entries} /> : null}
         <RoutineStreaks />
+        <WeeklyTotals />
         {!loading ? <ProgressChart entries={entries} /> : null}
         </> : null}
         {section === 'today' ? <>
