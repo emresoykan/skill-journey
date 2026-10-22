@@ -19,6 +19,9 @@ export const habitPresets: HabitPreset[] = [
   { icon: '📵', title: 'Ekransız akşam', skill: 'Self Care' },
 ];
 
+// Düzenleme modunda rutine seçilebilecek simgeler.
+export const habitIcons = ['⭐', '💧', '📖', '🚶', '🧘', '🛏️', '📝', '🏋️', '📵', '🥗', '💊', '🦷', '☀️', '🌙', '🧹', '🎸', '💻', '🚴', '🙏', '❤️'];
+
 const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 const isSameDay = (iso: string, now: Date) => dayKey(new Date(iso)) === dayKey(now);
 export const normalizeTitle = (title: string) => title.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');

@@ -1,7 +1,7 @@
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
 import { loadEntries, loadHabits, saveEntries, saveHabits, type Entry } from './storage';
-import { DEFAULT_REMINDER, habitAnalysis, habitTitleError, routinesProgress, type Habit, type HabitPreset, type ReminderSettings } from './routines';
+import { DEFAULT_REMINDER, habitAnalysis, habitPresets, habitTitleError, normalizeTitle, routinesProgress, type Habit, type HabitPreset, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
 import { capAwards, correctSkillAward } from './skillCorrections';
 import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
@@ -178,6 +178,34 @@ function useJourneyState() {
     }
   }
 
+  // Ad ya da simge değişir. Ad değişince beceri yeniden belirlenir: hazır öneriyle aynıysa
+  // onun becerisi, değilse addan çıkarılan beceri. Geçmiş tikler eski adıyla kalır.
+  async function updateHabit(id: string, changes: { title?: string; icon?: string }): Promise<boolean> {
+    const current = habits.find(habit => habit.id === id);
+    if (!current || busy) return false;
+    const title = changes.title?.trim().replace(/\s+/g, ' ') ?? current.title;
+    const renamed = title !== current.title;
+    if (renamed) {
+      const problem = habitTitleError(title, habits.filter(habit => habit.id !== id));
+      if (problem) { setHabitError(problem); return false; }
+    }
+    setBusy(true);
+    setHabitError('');
+    try {
+      const preset = habitPresets.find(item => normalizeTitle(item.title) === normalizeTitle(title));
+      const skill = !renamed ? current.skill : preset?.skill ?? (await analyzeExperience(title)).skill;
+      const updated = habits.map(habit => habit.id === id ? { ...habit, title, skill, icon: changes.icon ?? habit.icon } : habit);
+      await saveHabits(updated);
+      setHabits(updated);
+      return true;
+    } catch {
+      setHabitError('Rutin güncellenemedi. Lütfen tekrar dene.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Rutin listeden kalkar; geçmişte attığın tikler (kayıtlar) ve kazandığın XP silinmez.
   async function removeHabit(id: string) {
     if (busy) return;
@@ -273,7 +301,7 @@ function useJourneyState() {
   }
 
 
-  return { reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,addHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {
