@@ -59,7 +59,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         {section === 'memories' ? <>
         <Text style={s.section}>Anılarını bul</Text>
         <View style={s.searchRow}>
-          <TextInput accessibilityLabel="Anılarda ara" placeholder="Kayıt veya beceri ara..." placeholderTextColor="#657482" value={query} onChangeText={setQuery} style={[s.editInput, { flex: 1, minHeight: 48, fontSize: 15, color: '#182637', backgroundColor: 'white', marginBottom: 0 }]} />
+          <TextInput accessibilityLabel="Anılarda ara" placeholder="Kayıt veya beceri ara..." placeholderTextColor="#657482" value={query} onChangeText={setQuery} style={[s.editInput, { flex: 1, minWidth: 0, minHeight: 48, fontSize: 15, color: '#182637', backgroundColor: 'white', marginBottom: 0 }]} />
           <MicButton value="" onChangeText={setQuery} size={48} />
         </View>
         {query ? <Pressable accessibilityRole="button" onPress={() => setQuery('')}><Text style={[s.editText, { marginBottom: 12 }]}>Aramayı temizle · {visibleEntries.length} kayıt bulundu</Text></Pressable> : null}
