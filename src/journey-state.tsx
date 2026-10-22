@@ -2,7 +2,7 @@ import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
 import { loadEntries, loadHabitCounts, loadHabits, loadReviews, saveEntries, saveHabitCounts, saveHabits, saveReviews, type Entry } from './storage';
 import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
-import { dayKey, DEFAULT_REMINDER, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type ReminderSettings } from './routines';
+import { dayKey, DEFAULT_REMINDER, formatMeasures, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type MeasureValues, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
 import { capAwards, correctSkillAward } from './skillCorrections';
 import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
@@ -86,7 +86,7 @@ function useJourneyState() {
 
   // Elle yazılan kayıt, rutin tiki, öğrenilen kavram ve tekrar oturumu buradan geçer:
   // aynı XP, seri, hedef ve rozet hesabı. Oluşan kaydın kimliğini döner.
-  async function recordEntry(description: string, result: Analysis, extra: Pick<Entry, 'habitId' | 'learning' | 'review'> = {}) {
+  async function recordEntry(description: string, result: Analysis, extra: Pick<Entry, 'habitId' | 'measures' | 'learning' | 'review'> = {}) {
     const knownSkills = new Set(entries.flatMap(entry => entry.awards.map(award => award.skill)));
     const previousSkillXp = entries.flatMap(entry => entry.awards).reduce<Record<string, number>>((totals, award) => {
       totals[award.skill] = (totals[award.skill] ?? 0) + award.xp;
@@ -213,6 +213,36 @@ function useJourneyState() {
       }
     } catch {
       setHabitError('Rutin güncellenemedi. Lütfen tekrar dene.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Ölçülü rutin (ör. yürüyüşte adım ve süre): ölçülerle tik atılır; bugün zaten tikliyse ölçüler güncellenir
+  // (XP değişmez). Ölçüler kayıt metnine de yazılır, Anılar'da görünür.
+  async function logHabit(habit: Habit, measures: MeasureValues): Promise<boolean> {
+    if (busy) return false;
+    setBusy(true);
+    setHabitError('');
+    setReward(null);
+    setEditNotice(null);
+    try {
+      const summary = formatMeasures(measures);
+      const description = summary ? `${habit.title} · ${summary}` : habit.title;
+      const extra = Object.keys(measures).length ? { measures } : {};
+      const done = routines.done.get(habit.id);
+      if (done) {
+        const updated = entries.map(entry => entry.id === done.id ? { ...entry, description, measures: extra.measures } : entry);
+        await saveEntries(updated);
+        setEntries(updated);
+        tap();
+      } else {
+        await recordEntry(description, habitAnalysis(habit), { habitId: habit.id, ...extra });
+      }
+      return true;
+    } catch {
+      setHabitError('Rutin kaydedilemedi. Lütfen tekrar dene.');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -415,7 +445,7 @@ function useJourneyState() {
   }
 
 
-  return { reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {
