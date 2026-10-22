@@ -11,6 +11,7 @@ import { PlayerCard } from './PlayerCard';
 import { DailyQuest } from './DailyQuest';
 import { RewardCard, isSpecialReward } from './RewardCard';
 import { TodayLog } from './TodayLog';
+import { LearnCard, LearningNotebook, ReviewCard } from './LearningCards';
 import { RoutineStreaks, Routines } from './RoutinesCard';
 import { Badges } from './Badges';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
@@ -42,10 +43,12 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         </> : null}
         {section === 'today' ? <>
         <PlayerCard totalXp={totalXp} streak={streak} />
+        <ReviewCard>{reward?.kind === 'review' ? <RewardCard key={reward.id} reward={reward} /> : null}</ReviewCard>
         <Routines />
         <TodayLog today={today} draft={draft} error={error} busy={busy} disabled={loading} onChangeDraft={v => { setDraft(v); setError(''); }} onAdd={addMoment}>
-          {reward ? <RewardCard key={reward.id} reward={reward} /> : analyzing ? <Text style={s.analyzing}>✦ Becerilerin hesaplanıyor…</Text> : null}
+          {reward && (reward.kind === 'moment' || reward.kind === 'habit') ? <RewardCard key={reward.id} reward={reward} /> : analyzing ? <Text style={s.analyzing}>✦ Becerilerin hesaplanıyor…</Text> : null}
         </TodayLog>
+        <LearnCard>{reward?.kind === 'learning' ? <RewardCard key={reward.id} reward={reward} /> : null}</LearnCard>
         {!loading ? <DailyQuest quest={quest} done={questDone} /> : null}
         </> : null}
         {section === 'growth' ? <>
@@ -57,6 +60,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         <TextInput accessibilityLabel="Anılarda ara" placeholder="Kayıt veya beceri ara..." placeholderTextColor="#657482" value={query} onChangeText={setQuery} style={[s.editInput, { minHeight: 48, fontSize: 15, color: '#182637', backgroundColor: 'white', marginBottom: 12 }]} />
         {query ? <Pressable accessibilityRole="button" onPress={() => setQuery('')}><Text style={[s.editText, { marginBottom: 12 }]}>Aramayı temizle · {visibleEntries.length} kayıt bulundu</Text></Pressable> : null}
         {!loading && !query ? <PastSelf entries={entries} /> : null}
+        <LearningNotebook query={query} />
         <Text style={s.section}>Zaman çizelgesi</Text>
         {timelineError ? <Text style={s.error}>{timelineError}</Text> : null}
         {loading ? <ActivityIndicator color={teal} /> : visibleEntries.length === 0 ? (

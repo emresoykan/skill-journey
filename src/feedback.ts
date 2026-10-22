@@ -13,6 +13,12 @@ export function tap() {
   run(() => Haptics.selectionAsync());
 }
 
+// Küçük kazanım: tekrar oturumunda hatırlanan her kavram.
+export function coin() {
+  playSound('xp');
+  run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+}
+
 type RewardEvent = { leveledUp: boolean; newBadges: unknown[]; bonusXp: number; goalReached: boolean; routinesComplete: boolean };
 
 // Önce XP jetonu, ardından anın en büyük ödülü için ikinci bir ses gelir.

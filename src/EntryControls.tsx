@@ -30,10 +30,12 @@ export function EntryEditForm({ entry }: { entry: Entry }) {
 
 export function EntryActionButtons({ entry }: { entry: Entry }) {
   const { busy, startEditing, setConfirmDeleteId } = useJourney();
+  // Öğrenilen kavram ve tekrar kayıtları metin olarak düzenlenmez; defter ve tekrarlar bozulmasın.
+  const editable = !entry.learning && !entry.review;
   return <View style={s.buttons}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Kaydı düzenle: ${entry.description}`} disabled={busy} onPress={() => startEditing(entry)}>
+    {editable ? <Pressable accessibilityRole="button" accessibilityLabel={`Kaydı düzenle: ${entry.description}`} disabled={busy} onPress={() => startEditing(entry)}>
       <Text style={s.primary}>Düzenle</Text>
-    </Pressable>
+    </Pressable> : null}
     <Pressable accessibilityRole="button" accessibilityLabel={`Kaydı sil: ${entry.description}`} disabled={busy} onPress={() => setConfirmDeleteId(entry.id)}>
       <Text style={s.danger}>Sil</Text>
     </Pressable>

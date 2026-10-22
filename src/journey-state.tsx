@@ -1,12 +1,14 @@
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
-import { loadEntries, loadHabits, saveEntries, saveHabits, type Entry } from './storage';
+import { loadEntries, loadHabits, loadReviews, saveEntries, saveHabits, saveReviews, type Entry } from './storage';
+import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
 import { DEFAULT_REMINDER, habitAnalysis, habitPresets, habitTitleError, normalizeTitle, routinesProgress, type Habit, type HabitPreset, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
 import { capAwards, correctSkillAward } from './skillCorrections';
 import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
-import { rewardFeedback, tap } from './feedback';
-export type Reward = { id: string; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean; goalReached: boolean; routinesComplete: boolean };
+import { coin, rewardFeedback, tap } from './feedback';
+export type RewardKind = 'moment' | 'habit' | 'learning' | 'review';
+export type Reward = { id: string; kind: RewardKind; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean; goalReached: boolean; routinesComplete: boolean };
 const normalizeDescription = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
 // Aynı şey farklı günlerde tekrar yazılabilir ("30 dk yürüdüm"); yalnızca aynı gün içinde tekrar engellenir.
 const isSameDayDuplicate = (entries: Entry[], description: string, day: string, exceptId?: string) =>
@@ -15,6 +17,8 @@ function useJourneyState() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitError, setHabitError] = useState('');
+  const [reviews, setReviews] = useState<Reviews>({});
+  const [learnError, setLearnError] = useState('');
   const [reminder, setReminderState] = useState<ReminderSettings>(DEFAULT_REMINDER);
   const [reminderLoaded, setReminderLoaded] = useState(false);
   const [reminderError, setReminderError] = useState('');
@@ -38,6 +42,7 @@ function useJourneyState() {
   const streak = getStreak(entries);
   const today = todayEntries(entries);
   const routines = routinesProgress(habits, entries);
+  const dueReviews = dueLearnings(entries, reviews);
   const skillTotals = Object.entries(entries.reduce<Record<string, number>>((totals, entry) => {
     for (const award of entry.awards) totals[award.skill] = (totals[award.skill] ?? 0) + award.xp;
     return totals;
@@ -46,6 +51,7 @@ function useJourneyState() {
   useEffect(() => {
     loadEntries().then(setEntries).catch(() => setError('Kaydedilen anlar yüklenemedi.')).finally(() => setLoading(false));
     loadHabits().then(setHabits).catch(() => setHabitError('Rutinler yüklenemedi.'));
+    loadReviews().then(setReviews).catch(() => {});
     loadReminder().then(setReminderState).catch(() => {}).finally(() => setReminderLoaded(true));
   }, []);
 
@@ -76,20 +82,22 @@ function useJourneyState() {
     }
   }
 
-  // Elle yazılan kayıt da rutin tiki de buradan geçer: aynı XP, seri, hedef ve rozet hesabı.
-  async function recordEntry(description: string, result: Analysis, habitId?: string) {
+  // Elle yazılan kayıt, rutin tiki, öğrenilen kavram ve tekrar oturumu buradan geçer:
+  // aynı XP, seri, hedef ve rozet hesabı. Oluşan kaydın kimliğini döner.
+  async function recordEntry(description: string, result: Analysis, extra: Pick<Entry, 'habitId' | 'learning' | 'review'> = {}) {
     const knownSkills = new Set(entries.flatMap(entry => entry.awards.map(award => award.skill)));
     const previousSkillXp = entries.flatMap(entry => entry.awards).reduce<Record<string, number>>((totals, award) => {
       totals[award.skill] = (totals[award.skill] ?? 0) + award.xp;
       return totals;
     }, {});
     const bonusXp = !questDone && result.awards.some(award => award.skill === quest.skill) ? quest.bonus : 0;
-    const next: Entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString(), description, ...result, ...(bonusXp ? { bonusXp } : {}), ...(habitId ? { habitId } : {}) };
+    const next: Entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString(), description, ...result, ...(bonusXp ? { bonusXp } : {}), ...extra };
     const updated = [next, ...entries];
     await saveEntries(updated);
     const newLevel = level(totalXp + result.xp + bonusXp);
     const nextReward: Reward = {
       id: next.id,
+      kind: extra.learning ? 'learning' : extra.review ? 'review' : extra.habitId ? 'habit' : 'moment',
       analysis: result,
       bonusXp,
       newSkills: result.awards.filter(award => !knownSkills.has(award.skill)).map(award => award.skill),
@@ -106,6 +114,57 @@ function useJourneyState() {
     setReward(nextReward);
     if (nextReward.leveledUp) setLevelUpShown(newLevel);
     rewardFeedback(nextReward);
+    return next.id;
+  }
+
+  async function addLearning(term: string, meaning: string): Promise<boolean> {
+    const learning = { term: term.trim().replace(/\s+/g, ' '), meaning: meaning.trim().replace(/\s+/g, ' ') };
+    const problem = learningError(learning.term, learning.meaning, entries);
+    if (problem) { setLearnError(problem); return false; }
+    if (busy) return false;
+    setBusy(true);
+    setLearnError('');
+    setReward(null);
+    setEditNotice(null);
+    try {
+      // İlk tekrar ertesi gün; ayrıca kaydetmeye gerek yok (reviewStateOf kayıt tarihinden hesaplar).
+      await recordEntry(learningDescription(learning), learningAnalysis(), { learning });
+      return true;
+    } catch {
+      setLearnError('Kaydedilemedi. Lütfen tekrar dene.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Hatırlanan her kavram günün tek tekrar kaydına +REVIEW_XP ekler; unutulan ertesi güne döner.
+  async function reviewLearning(entry: Entry, remembered: boolean) {
+    if (busy) return;
+    setBusy(true);
+    setLearnError('');
+    try {
+      const nextReviews = { ...reviews, [entry.id]: nextReview(reviewStateOf(entry, reviews), remembered) };
+      await saveReviews(nextReviews);
+      setReviews(nextReviews);
+      if (!remembered) { tap(); return; }
+      const existing = reviewEntryToday(entries);
+      if (!existing?.review) {
+        setReward(null);
+        await recordEntry(reviewDescription(1), reviewAnalysis(1), { review: { count: 1 } });
+        return;
+      }
+      const count = existing.review.count + 1;
+      const updated = entries.map(item => item.id === existing.id ? { ...item, ...reviewAnalysis(count), description: reviewDescription(count), review: { count } } : item);
+      await saveEntries(updated);
+      setEntries(updated);
+      if (level(totalXp + REVIEW_XP) > level(totalXp)) setLevelUpShown(level(totalXp + REVIEW_XP));
+      coin();
+    } catch {
+      setLearnError('Tekrar kaydedilemedi. Lütfen tekrar dene.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function addMoment() {
@@ -146,7 +205,7 @@ function useJourneyState() {
         setEntries(updated);
         tap();
       } else {
-        await recordEntry(habit.title, habitAnalysis(habit), habit.id);
+        await recordEntry(habit.title, habitAnalysis(habit), { habitId: habit.id });
       }
     } catch {
       setHabitError('Rutin güncellenemedi. Lütfen tekrar dene.');
@@ -301,7 +360,7 @@ function useJourneyState() {
   }
 
 
-  return { reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {

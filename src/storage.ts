@@ -1,12 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Analysis, SkillAward } from './mockAnalysis';
 import type { Habit } from './routines';
+import type { Learning, Reviews } from './learning';
 
 // bonusXp: günlük görevden gelen ek XP; beceriye değil toplam XP'ye eklenir.
 // habitId: kayıt bir rutine tik atılarak oluştuysa o rutinin kimliği.
-export type Entry = Analysis & { id: string; createdAt: string; description: string; bonusXp?: number; habitId?: string };
+// learning: "Öğrendiklerim" kaydının kavramı ve anlamı. review: günün tekrar oturumu (kaç kavram hatırlandı).
+export type Entry = Analysis & { id: string; createdAt: string; description: string; bonusXp?: number; habitId?: string; learning?: Learning; review?: { count: number } };
 const KEY = 'skill-journey:entries:v1';
 const HABITS_KEY = 'skill-journey:habits:v1';
+const REVIEWS_KEY = 'skill-journey:reviews:v1';
 
 export async function loadEntries(): Promise<Entry[]> {
   const stored = await AsyncStorage.getItem(KEY);
@@ -21,7 +24,9 @@ export async function loadEntries(): Promise<Entry[]> {
       ) && entry.awards.length > 0
         ? entry.awards
         : [{ skill: entry.skill, xp: entry.xp }];
-      return { ...entry, awards, bonusXp: typeof entry.bonusXp === 'number' && entry.bonusXp > 0 ? entry.bonusXp : undefined, habitId: typeof entry.habitId === 'string' ? entry.habitId : undefined };
+      const learning = typeof entry.learning?.term === 'string' && typeof entry.learning?.meaning === 'string' ? { term: entry.learning.term, meaning: entry.learning.meaning } : undefined;
+      const review = Number.isInteger(entry.review?.count) && entry.review!.count > 0 ? { count: entry.review!.count } : undefined;
+      return { ...entry, awards, bonusXp: typeof entry.bonusXp === 'number' && entry.bonusXp > 0 ? entry.bonusXp : undefined, habitId: typeof entry.habitId === 'string' ? entry.habitId : undefined, learning, review };
     });
 }
 
@@ -40,4 +45,17 @@ export async function loadHabits(): Promise<Habit[]> {
 
 export async function saveHabits(habits: Habit[]): Promise<void> {
   await AsyncStorage.setItem(HABITS_KEY, JSON.stringify(habits));
+}
+
+export async function loadReviews(): Promise<Reviews> {
+  const stored = await AsyncStorage.getItem(REVIEWS_KEY);
+  if (!stored) return {};
+  const parsed: unknown = JSON.parse(stored);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return Object.fromEntries(Object.entries(parsed).filter(([, state]) =>
+    !!state && Number.isInteger(state.stage) && typeof state.due === 'string'));
+}
+
+export async function saveReviews(reviews: Reviews): Promise<void> {
+  await AsyncStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
 }

@@ -102,7 +102,7 @@ export function dailyQuest(now = new Date()): Quest {
 export const questDoneToday = (entries: Entry[], now = new Date()) =>
   entries.some(entry => (entry.bonusXp ?? 0) > 0 && isToday(entry.createdAt, now));
 
-type Stats = { entries: number; skills: number; level: number; streak: number; quests: number; combo: number; skillLevel: number; goalDays: number; habitChecks: number; habitStreak: number };
+type Stats = { entries: number; skills: number; level: number; streak: number; quests: number; combo: number; skillLevel: number; goalDays: number; habitChecks: number; habitStreak: number; learnings: number; recalls: number };
 export type Badge = { id: string; icon: string; title: string; description: string; stat: keyof Stats; goal: number };
 export type BadgeProgress = Badge & { current: number; unlocked: boolean };
 
@@ -114,6 +114,7 @@ export const badges: Badge[] = [
   { id: 'quest1', icon: '🎯', title: 'Görev Avcısı', description: 'İlk günlük görevi tamamla', stat: 'quests', goal: 1 },
   { id: 'goal1', icon: '✅', title: 'Tam Gün', description: `Bir günde ${DAILY_GOAL} şey kaydet`, stat: 'goalDays', goal: 1 },
   { id: 'habit1', icon: '🌱', title: 'İlk Rutin', description: 'Bir rutine ilk tikini at', stat: 'habitChecks', goal: 1 },
+  { id: 'learn10', icon: '📚', title: 'Meraklı', description: '10 kavram ya da kelime öğren', stat: 'learnings', goal: 10 },
   { id: 'entries5', icon: '📔', title: 'Günlükçü', description: '5 şey kaydet', stat: 'entries', goal: 5 },
   { id: 'streak7', icon: '☄️', title: 'Alev Alev', description: '7 günlük seri yap', stat: 'streak', goal: 7 },
   { id: 'level5', icon: '⭐', title: 'Yükselen Yıldız', description: 'Seviye 5’e ulaş', stat: 'level', goal: 5 },
@@ -125,6 +126,7 @@ export const badges: Badge[] = [
   { id: 'entries20', icon: '📚', title: 'Hikâye Anlatıcısı', description: '20 şey kaydet', stat: 'entries', goal: 20 },
   { id: 'entries50', icon: '🏛️', title: 'Arşivci', description: '50 şey kaydet', stat: 'entries', goal: 50 },
   { id: 'habit21', icon: '🔁', title: 'Alışkanlık', description: 'Bir rutini 21 gün üst üste yap', stat: 'habitStreak', goal: 21 },
+  { id: 'recall20', icon: '🧠', title: 'Hafıza Ustası', description: 'Tekrarlarda 20 kez hatırla', stat: 'recalls', goal: 20 },
 ];
 
 function getStats(entries: Entry[]): Stats {
@@ -142,6 +144,8 @@ function getStats(entries: Entry[]): Stats {
     skillLevel: Math.max(0, ...Object.values(skillXp).map(level)),
     goalDays: groupByDay(entries).filter(group => group.entries.length >= DAILY_GOAL).length,
     habitChecks: entries.filter(entry => entry.habitId).length,
+    learnings: entries.filter(entry => entry.learning).length,
+    recalls: entries.reduce((sum, entry) => sum + (entry.review?.count ?? 0), 0),
     habitStreak: Math.max(0, ...[...new Set(entries.map(entry => entry.habitId).filter(Boolean))]
       .map(id => longestStreak(entries.filter(entry => entry.habitId === id)))),
   };

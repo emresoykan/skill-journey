@@ -38,6 +38,12 @@ const cases = [
   ['Gitar çalıştım', ['Music', 'Learning'], []],
   ['Piyano dersine gittim', ['Music'], []],
   ['Bisiklete bindim', ['Fitness'], []],
+  ['Serendipity: şans eseri güzel bir keşif demekmiş', ['Learning'], []],
+  ['Bileşik faiz kavramı', ['Learning'], []],
+  ['Fotosentez konusu', ['Learning'], []],
+  ['Opsiyon fiyatlaması terimini inceledim', ['Learning'], []],
+  ["Ephemeral'ın anlamı geçici", ['Learning'], []],
+  ['Hintçe 3 kelime ezberledim', ['Learning'], []],
 
   // Yanlış eşleşmeler: kısa kökler alakasız kelimelere takılmamalı.
   ['Brüt marjı yüzde 5 artırdım', [], ['Fitness']],
@@ -66,6 +72,10 @@ const cases = [
   ['Yeni bir tarif denedim', ['Cooking'], ['Resilience']],
   ['Yeni bir kafe denedim', [], ['Resilience']],
   ['Single origin kahve aldım', [], ['Music']],
+  ['Annemle telefonda konuştum', ['Communication'], ['Learning']],
+  ['Yeni konuta taşındık', [], []],
+  ['Konum paylaştım', ['Communication'], ['Learning']],
+  ['Akşam konuklarımız vardı', [], ['Learning']],
 ];
 
 for (const [text, expected, forbidden] of cases) {

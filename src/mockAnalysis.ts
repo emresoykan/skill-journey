@@ -5,7 +5,8 @@ const rules = [
   { skill: 'Communication', words: ['talk', 'spoke', 'explain', 'present', 'listen', 'message', 'mesaj', 'konuş', 'anlat', 'sunum', 'dinle', 'paylaş', 'toplant'], reason: 'Düşüncelerini ifade ettin veya birini dinledin.' },
   { skill: 'Problem Solving', words: ['solve', 'fix', 'debug', 'issue', 'problem', 'tricky', 'çöz', 'hata', 'sorun', 'düzelt'], reason: 'Bir sorunu ele alıp çözüm için adım attın.' },
   { skill: 'Collaboration', words: ['team', 'help', 'together', 'support', 'friend', 'colleague', 'ekip', 'yardım', 'birlikte', 'arkadaş', 'destek'], reason: 'Birine destek oldun veya birlikte ilerledin.' },
-  { skill: 'Learning', words: ['learn', 'study', 'read', 'practice', 'course', 'new', 'öğren', 'çalış', 'oku', 'pratik', 'yeni', 'araştır'], reason: 'Yeni bir şey öğrenmeye veya anlamaya zaman ayırdın.' },
+  // "Kelime: anlamı" gibi kısa öğrenme notları da sayılır (kelime, kavram, terim, anlamı, demekmiş).
+  { skill: 'Learning', words: ['learn', 'study', 'read', 'practice', 'course', 'new', 'vocabulary', 'concept', 'meaning', 'öğren', 'çalış', 'oku', 'pratik', 'yeni', 'araştır', 'kelime', 'kavram', 'konu', 'terim', 'anlamı', 'anlamın', 'demekmiş', 'demektir'], reason: 'Yeni bir şey öğrenmeye veya anlamaya zaman ayırdın.' },
   { skill: 'Creativity', words: ['create', 'write', 'design', 'draw', 'make', 'yarat', 'tasar', 'çiz', 'yaz', 'üret'], reason: 'Bir fikri geliştirdin veya ortaya yeni bir şey koydun.' },
   // "denedim" tek başına yeni bir şeyi denemektir; azim ancak "tekrar", "zor", "vazgeçmedim" gibi sözcüklerle anlaşılır.
   { skill: 'Resilience', words: ['hard', 'difficult', 'failed', 'again', 'challenge', 'zor', 'tekrar', 'başarısız', 'vazgeç'], reason: 'Zorluk karşısında çabalamaya devam ettin.' },
@@ -30,6 +31,7 @@ const falseFriends: Record<string, readonly string[]> = {
   dinle: ['dinlen'],
   read: ['ready'],
   oku: ['okul'],
+  konu: ['konuş', 'konut', 'konum', 'konuk'],
   yeni: ['yeniden'],
   ekip: ['ekipman'],
   tasar: ['tasarruf'],
