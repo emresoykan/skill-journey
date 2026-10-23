@@ -6,6 +6,7 @@ export const BACKUP_KEYS = [
   'skill-journey:entries:v1',
   'skill-journey:habits:v1',
   'skill-journey:habit-counts:v1',
+  'skill-journey:todos:v1',
   'skill-journey:reviews:v1',
   'skill-journey:reminder:v1',
   'skill-journey:sound:v1',

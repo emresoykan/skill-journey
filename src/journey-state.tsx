@@ -1,6 +1,7 @@
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
-import { loadEntries, loadHabitCounts, loadHabits, loadReviews, saveEntries, saveHabitCounts, saveHabits, saveReviews, type Entry } from './storage';
+import { loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, type Entry } from './storage';
+import { cleanTodoTitle, todoTitleError, visibleTodos, type Todo } from './todos';
 import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
 import { dayKey, DEFAULT_REMINDER, formatMeasures, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_GOAL_MINUTES, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type MeasureValues, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
@@ -18,6 +19,8 @@ function useJourneyState() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitError, setHabitError] = useState('');
   const [habitCounts, setHabitCounts] = useState<HabitCounts>({});
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todoError, setTodoError] = useState('');
   const [reviews, setReviews] = useState<Reviews>({});
   const [learnError, setLearnError] = useState('');
   const [reminder, setReminderState] = useState<ReminderSettings>(DEFAULT_REMINDER);
@@ -44,6 +47,7 @@ function useJourneyState() {
   const today = todayEntries(entries);
   const routines = routinesProgress(habits, entries);
   const dueReviews = dueLearnings(entries, reviews);
+  const todoList = visibleTodos(todos);
   const skillTotals = Object.entries(entries.reduce<Record<string, number>>((totals, entry) => {
     for (const award of entry.awards) totals[award.skill] = (totals[award.skill] ?? 0) + award.xp;
     return totals;
@@ -53,6 +57,7 @@ function useJourneyState() {
     loadEntries().then(setEntries).catch(() => setError('Kaydedilen anlar yüklenemedi.')).finally(() => setLoading(false));
     loadHabits().then(setHabits).catch(() => setHabitError('Rutinler yüklenemedi.'));
     loadHabitCounts().then(setHabitCounts).catch(() => {});
+    loadTodos().then(setTodos).catch(() => setTodoError('Yapılacaklar yüklenemedi.'));
     loadReviews().then(setReviews).catch(() => {});
     loadReminder().then(setReminderState).catch(() => {}).finally(() => setReminderLoaded(true));
   }, []);
@@ -364,6 +369,88 @@ function useJourneyState() {
     }
   }
 
+  async function addTodo(title: string): Promise<boolean> {
+    const problem = todoTitleError(title, todos);
+    if (problem) { setTodoError(problem); return false; }
+    if (busy) return false;
+    setBusy(true);
+    setTodoError('');
+    try {
+      const todo: Todo = { id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: cleanTodoTitle(title), createdAt: new Date().toISOString() };
+      const updated = [...todos, todo];
+      await saveTodos(updated);
+      setTodos(updated);
+      return true;
+    } catch {
+      setTodoError('Eklenemedi. Lütfen tekrar dene.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Tamamlanan iş, elle yazılmış gibi bugünün kaydı olur: beceriler işin adından çıkarılır, XP ve seri işler.
+  async function completeTodo(todo: Todo) {
+    if (busy || todo.doneAt) return;
+    if (isSameDayDuplicate(entries, todo.title, new Date().toISOString())) {
+      setTodoError('Bunu bugün zaten kaydettin.');
+      return;
+    }
+    setBusy(true);
+    setAnalyzing(true);
+    setTodoError('');
+    setReward(null);
+    setEditNotice(null);
+    try {
+      const result = await analyzeExperience(todo.title);
+      const entryId = await recordEntry(todo.title, result);
+      const updated = todos.map(item => item.id === todo.id ? { ...item, doneAt: new Date().toISOString(), entryId } : item);
+      await saveTodos(updated);
+      setTodos(updated);
+    } catch {
+      setTodoError('İş tamamlanamadı. Lütfen tekrar dene.');
+    } finally {
+      setBusy(false);
+      setAnalyzing(false);
+    }
+  }
+
+  // Tik geri alınınca iş yeniden açılır ve oluşturduğu kayıt (XP'siyle) silinir.
+  async function reopenTodo(todo: Todo) {
+    if (busy) return;
+    setBusy(true);
+    setTodoError('');
+    setReward(null);
+    setEditNotice(null);
+    try {
+      const updated = todos.map(item => item.id === todo.id ? { id: item.id, title: item.title, createdAt: item.createdAt } : item);
+      await saveTodos(updated);
+      setTodos(updated);
+      if (todo.entryId && entries.some(entry => entry.id === todo.entryId)) {
+        const remaining = entries.filter(entry => entry.id !== todo.entryId);
+        await saveEntries(remaining);
+        setEntries(remaining);
+      }
+      tap();
+    } catch {
+      setTodoError('İş geri alınamadı. Lütfen tekrar dene.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // İş listeden kalkar; tamamlanmışsa oluşturduğu kayıt ve XP Anılar'da kalır.
+  async function removeTodo(id: string) {
+    if (busy) return;
+    try {
+      const updated = todos.filter(todo => todo.id !== id);
+      await saveTodos(updated);
+      setTodos(updated);
+    } catch {
+      setTodoError('İş silinemedi. Lütfen tekrar dene.');
+    }
+  }
+
   async function deleteMoment(id: string) {
     if (busy) return;
     setBusy(true);
@@ -372,6 +459,13 @@ function useJourneyState() {
       const updated = entries.filter(entry => entry.id !== id);
       await saveEntries(updated);
       setEntries(updated);
+      // Bugün tamamlanan bir işin kaydı silinirse iş yeniden açılır (rutin tikinin kalkması gibi).
+      const linked = todoList.doneToday.find(todo => todo.entryId === id);
+      if (linked) {
+        const reopened = todos.map(todo => todo.id === linked.id ? { id: todo.id, title: todo.title, createdAt: todo.createdAt } : todo);
+        await saveTodos(reopened);
+        setTodos(reopened);
+      }
       setReward(null);
       setEditNotice(null);
       setConfirmDeleteId(null);
@@ -447,7 +541,7 @@ function useJourneyState() {
   }
 
 
-  return { reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { todoList,todoError,setTodoError,addTodo,completeTodo,reopenTodo,removeTodo,reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {
