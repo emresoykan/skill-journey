@@ -5,6 +5,7 @@ import { displaySkill } from './mockAnalysis';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { useJourney } from './journey-state';
 import { MicButton } from './MicButton';
+import { OpenTodos } from './TodoItems';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
@@ -22,11 +23,20 @@ type Props = {
 };
 
 // Bugün sekmesinin kalbi: hızlı tek satır giriş, günlük hedef ve günün listesi.
+// Aynı alana yapılacak iş de yazılır; iş tiklenince bu listeye kayıt olarak geçer.
 export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, onAdd, children }: Props) {
   const done = Math.min(today.length, DAILY_GOAL);
   const skills = new Set(today.flatMap(entry => entry.awards.map(award => award.skill)));
   const xp = today.reduce((sum, entry) => sum + entryXp(entry), 0);
-  const { editingId } = useJourney();
+  const { editingId, todoList, todoError, setTodoError, addTodo } = useJourney();
+  const [mode, setMode] = useState<'done' | 'todo'>('done');
+  const planning = mode === 'todo';
+  const fromTodo = new Set(todoList.doneToday.map(todo => todo.entryId));
+  const change = (value: string) => { onChangeDraft(value); setTodoError(''); };
+  async function submit() {
+    if (!planning) return onAdd();
+    if (await addTodo(draft)) onChangeDraft('');
+  }
   // Bir kayda dokununca Düzenle/Sil açılır; aynı kayda tekrar dokununca kapanır.
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -38,34 +48,41 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
     <View style={s.segments}>
       {Array.from({ length: DAILY_GOAL }, (_, i) => <View key={i} style={[s.segment, i < done && s.segmentOn]} />)}
     </View>
+    <View style={s.modes}>
+      {([['done', '✓ Yaptım'], ['todo', '☐ Yapacağım']] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="radio" accessibilityState={{ selected: mode === key }} aria-checked={mode === key} onPress={() => { setMode(key); setTodoError(''); }} style={[s.mode, mode === key && s.modeOn]}>
+        <Text style={[s.modeText, mode === key && s.modeTextOn]}>{label}</Text>
+      </Pressable>)}
+    </View>
     <View style={s.inputRow}>
       <TextInput
-        accessibilityLabel="Bugün ne yaptın, ne yaşadın?"
-        placeholder="örn. İlk kez sunum yaptım"
+        accessibilityLabel={planning ? 'Yapılacak iş' : 'Bugün ne yaptın, ne yaşadın?'}
+        placeholder={planning ? 'örn. Bütçe raporunu bitir' : 'örn. İlk kez sunum yaptım'}
         placeholderTextColor="#9AA6A8"
         maxLength={200}
         returnKeyType="done"
         submitBehavior="submit"
-        onSubmitEditing={onAdd}
+        onSubmitEditing={submit}
         value={draft}
-        onChangeText={onChangeDraft}
+        onChangeText={change}
         style={s.input}
       />
-      <MicButton value={draft} onChangeText={onChangeDraft} />
-      <Pressable accessibilityRole="button" accessibilityLabel="Ekle" disabled={disabled || busy || !draft.trim()} onPress={onAdd} style={[s.add, (disabled || busy || !draft.trim()) && { opacity: 0.45 }]}>
+      <MicButton value={draft} onChangeText={change} />
+      <Pressable accessibilityRole="button" accessibilityLabel={planning ? 'Yapılacaklara ekle' : 'Ekle'} disabled={disabled || busy || !draft.trim()} onPress={submit} style={[s.add, (disabled || busy || !draft.trim()) && { opacity: 0.45 }]}>
         {busy ? <ActivityIndicator color="white" /> : <Text style={s.addText}>+</Text>}
       </Pressable>
     </View>
-    {error ? <Text style={s.error}>{error}</Text> : null}
+    {error || todoError ? <Text style={s.error}>{error || todoError}</Text> : null}
     {children}
-    {today.length === 0 ? <Text style={s.empty}>Henüz bir şey yok. Küçük ya da büyük, yaptığın ya da yaşadığın ilk şeyi ekle.</Text> : <>
+    <OpenTodos />
+    {today.length === 0 ? <Text style={s.empty}>{todoList.open.length ? 'Bir işi bitirince yuvarlağa dokun; buraya kayıt olarak geçer.' : 'Henüz bir şey yok. Küçük ya da büyük, yaptığın ya da yaşadığın ilk şeyi ekle. Yapmayı düşündüklerini “Yapacağım”a yazabilirsin.'}</Text> : <>
+      {todoList.open.length ? <Text style={s.label}>YAPTIKLARIN · {today.length}</Text> : null}
       {today.map(entry => <View key={entry.id} style={s.itemWrap}>
         {editingId === entry.id ? <EntryEditForm entry={entry} /> : <>
           <Pressable accessibilityRole="button" accessibilityLabel={`Kayıt seçenekleri: ${entry.description}`} accessibilityState={{ expanded: openId === entry.id }} onPress={() => setOpenId(openId === entry.id ? null : entry.id)} style={s.item}>
             <Text style={s.check}>✓</Text>
             <View style={{ flex: 1 }}>
               <Text style={s.itemText} numberOfLines={openId === entry.id ? undefined : 2}>{entry.description}</Text>
-              <Text style={s.itemSkills}>{entry.awards.map(award => displaySkill(award.skill)).join(' · ')}{entry.bonusXp ? ' · 🎯 Görev' : ''}{entry.habitId ? ' · 🔁 Rutin' : ''}</Text>
+              <Text style={s.itemSkills}>{entry.awards.map(award => displaySkill(award.skill)).join(' · ')}{entry.bonusXp ? ' · 🎯 Görev' : ''}{entry.habitId ? ' · 🔁 Rutin' : ''}{fromTodo.has(entry.id) ? ' · ☑ Yapılacak' : ''}</Text>
             </View>
             <Text style={s.itemXp}>+{entryXp(entry)}</Text>
           </Pressable>
@@ -88,6 +105,12 @@ const s = StyleSheet.create({
   segments: { flexDirection: 'row', gap: 6, marginTop: 12, marginBottom: 14 },
   segment: { flex: 1, height: 7, borderRadius: 4, backgroundColor: '#E2E9E4' },
   segmentOn: { backgroundColor: gold },
+  modes: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  mode: { borderRadius: 12, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', paddingHorizontal: 12, paddingVertical: 7 },
+  modeOn: { backgroundColor: teal, borderColor: teal },
+  modeText: { color: '#657482', fontSize: 13, fontWeight: '800' },
+  modeTextOn: { color: 'white' },
+  label: { color: '#657482', fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 16, marginBottom: 2 },
   inputRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   input: { flex: 1, minWidth: 0, height: 50, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9' },
   add: { width: 50, height: 50, borderRadius: 14, backgroundColor: teal, alignItems: 'center', justifyContent: 'center' },

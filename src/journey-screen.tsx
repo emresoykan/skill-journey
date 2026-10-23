@@ -16,7 +16,6 @@ import { LearnCard, LearningNotebook, ReviewCard } from './LearningCards';
 import { RoutineStreaks, Routines, WeeklyTotals } from './RoutinesCard';
 import { Badges } from './Badges';
 import { BackupCard } from './BackupCard';
-import { TodosCard } from './TodosCard';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { Confetti } from './Confetti';
 import { setSoundEnabled, useSoundEnabled } from './sounds';
@@ -49,7 +48,6 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         <PlayerCard totalXp={totalXp} streak={streak} />
         <ReviewCard>{reward?.kind === 'review' ? <RewardCard key={reward.id} reward={reward} /> : null}</ReviewCard>
         <Routines />
-        <TodosCard />
         <TodayLog today={today} draft={draft} error={error} busy={busy} disabled={loading} onChangeDraft={v => { setDraft(v); setError(''); }} onAdd={addMoment}>
           {reward && (reward.kind === 'moment' || reward.kind === 'habit') ? <RewardCard key={reward.id} reward={reward} /> : analyzing ? <Text style={s.analyzing}>✦ Becerilerin hesaplanıyor…</Text> : null}
         </TodayLog>
