@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Analysis, SkillAward } from './mockAnalysis';
-import type { Habit, HabitCounts, Measure, MeasureValues } from './routines';
+import { renameLegacyHabit, type Habit, type HabitCounts, type Measure, type MeasureValues } from './routines';
 import type { Learning, Reviews } from './learning';
 
 // bonusXp: günlük görevden gelen ek XP; beceriye değil toplam XP'ye eklenir.
@@ -49,6 +49,7 @@ export async function loadHabits(): Promise<Habit[]> {
   if (!Array.isArray(parsed)) return [];
   return parsed.filter((habit): habit is Habit => !!habit && typeof habit === 'object'
     && ['id', 'title', 'icon', 'skill', 'createdAt'].every(key => typeof habit[key] === 'string'))
+    .map(renameLegacyHabit)
     .map(habit => ({ ...habit, target: Number.isInteger(habit.target) && habit.target! >= 1 ? habit.target : undefined, unit: typeof habit.unit === 'string' && habit.unit.trim() ? habit.unit : undefined,
       goalMinutes: Number.isInteger(habit.goalMinutes) && habit.goalMinutes! > 0 ? habit.goalMinutes : undefined,
       measures: Array.isArray(habit.measures) ? habit.measures.filter((m: unknown): m is Measure => MEASURES.includes(m as Measure)) : undefined }));
