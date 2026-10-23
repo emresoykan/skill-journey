@@ -15,6 +15,7 @@ import { MicButton } from './MicButton';
 import { LearnCard, LearningNotebook, ReviewCard } from './LearningCards';
 import { RoutineStreaks, Routines, WeeklyTotals } from './RoutinesCard';
 import { Badges } from './Badges';
+import { BackupCard } from './BackupCard';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { Confetti } from './Confetti';
 import { setSoundEnabled, useSoundEnabled } from './sounds';
@@ -56,6 +57,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         {section === 'growth' ? <>
         <View style={s.row}><Text style={s.section}>Beceri ağacın</Text><Text style={s.muted}>{skillTotals.length} beceri · {entries.length} kayıt</Text></View>
         <SkillEvidence entries={entries} busy={busy} onCorrectAward={correctAward} />
+        <BackupCard />
         </> : null}
         {section === 'memories' ? <>
         <Text style={s.section}>Anılarını bul</Text>
