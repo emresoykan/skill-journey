@@ -10,6 +10,7 @@ export const BACKUP_KEYS = [
   'skill-journey:reviews:v1',
   'skill-journey:reminder:v1',
   'skill-journey:sound:v1',
+  'skill-journey:entry-mode:v1',
 ] as const;
 
 const FORMAT = 'skill-journey-backup';

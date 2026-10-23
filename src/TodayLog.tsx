@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DAILY_GOAL, entryXp } from './game';
 import { displaySkill } from './mockAnalysis';
@@ -10,6 +11,8 @@ import type { Entry } from './storage';
 
 const teal = '#166B65';
 const gold = '#F5C45A';
+const MODE_KEY = 'skill-journey:entry-mode:v1';
+type Mode = 'done' | 'todo';
 
 type Props = {
   today: Entry[];
@@ -29,7 +32,12 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
   const skills = new Set(today.flatMap(entry => entry.awards.map(award => award.skill)));
   const xp = today.reduce((sum, entry) => sum + entryXp(entry), 0);
   const { editingId, todoList, todoError, setTodoError, addTodo } = useJourney();
-  const [mode, setMode] = useState<'done' | 'todo'>('done');
+  // Son seçilen mod (Yaptım / Yapacağım) hatırlanır; uygulama yeniden açılınca onunla başlar.
+  const [mode, setModeState] = useState<Mode>('done');
+  useEffect(() => {
+    AsyncStorage.getItem(MODE_KEY).then(value => { if (value === 'todo') setModeState('todo'); }).catch(() => {});
+  }, []);
+  const setMode = (next: Mode) => { setModeState(next); AsyncStorage.setItem(MODE_KEY, next).catch(() => {}); };
   const planning = mode === 'todo';
   const fromTodo = new Set(todoList.doneToday.map(todo => todo.entryId));
   const change = (value: string) => { onChangeDraft(value); setTodoError(''); };
