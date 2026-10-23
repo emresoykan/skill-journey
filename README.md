@@ -22,6 +22,10 @@ Mock analiz gerçek yapay zekâ değildir. Anahtar sözcük eşleşmesi ve metin
 
 Eşleşme kuralları `tests/analysis.test.mjs` içindeki örnek cümlelerle sınanır: `npm test` (Node 22.18+ gerekir). Yeni bir kök eklerken alakasız kelimelere takılıyorsa `src/mockAnalysis.ts` içindeki `falseFriends` listesine istisna ekleyin ve örneği teste yazın.
 
+## Yedekleme
+
+Gelişim sekmesindeki **Yedekleme** kartı (yalnız web): "Yedeği indir" kayıtları, rutinleri, tekrarları ve tercihleri tek bir JSON dosyasına yazar (iPhone'da paylaşım sayfası açılır, Dosyalar'a kaydedilebilir). "Yedekten yükle" dosyayı doğrular, içeriğini özetleyip onay ister ve mevcut verilerin yerine koyar. Yedeğe giren anahtarlar `src/backup.ts` içindeki `BACKUP_KEYS` listesindedir; `tests/backup.test.mjs` kaynakta yedeğe girmeyen yeni bir anahtar görürse başarısız olur.
+
 ## Logo
 
 Kaynak görsel `assets/logo/source.png` (1254×1254). Uygulama ikonu (`assets/icon.png`, 1024), Android adaptif ikonu (logo katmanın ortadaki %75'inde, çünkü başlatıcı yalnız ortadaki ~%66'yı gösterir), web sekme ikonu (`assets/favicon.png`, 48) ve iPhone ana ekran ikonu (`apple-touch-icon.png`, 180) bu görselden küçültülerek üretildi.
