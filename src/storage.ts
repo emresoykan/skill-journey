@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Analysis, SkillAward } from './mockAnalysis';
 import { renameLegacyHabit, type Habit, type HabitCounts, type Measure, type MeasureValues } from './routines';
 import type { Learning, Reviews } from './learning';
+import { parseTodos, pruneTodos, type Todo } from './todos';
 
 // bonusXp: günlük görevden gelen ek XP; beceriye değil toplam XP'ye eklenir.
 // habitId: kayıt bir rutine tik atılarak oluştuysa o rutinin kimliği.
@@ -12,6 +13,7 @@ const KEY = 'skill-journey:entries:v1';
 const HABITS_KEY = 'skill-journey:habits:v1';
 const REVIEWS_KEY = 'skill-journey:reviews:v1';
 const HABIT_COUNTS_KEY = 'skill-journey:habit-counts:v1';
+const TODOS_KEY = 'skill-journey:todos:v1';
 const MEASURES: Measure[] = ['steps', 'duration', 'pages'];
 const validMeasures = (value: unknown): MeasureValues | undefined => {
   if (!value || typeof value !== 'object') return undefined;
@@ -83,4 +85,13 @@ export async function loadHabitCounts(): Promise<HabitCounts> {
 
 export async function saveHabitCounts(counts: HabitCounts): Promise<void> {
   await AsyncStorage.setItem(HABIT_COUNTS_KEY, JSON.stringify(counts));
+}
+
+export async function loadTodos(): Promise<Todo[]> {
+  const stored = await AsyncStorage.getItem(TODOS_KEY);
+  return stored ? pruneTodos(parseTodos(JSON.parse(stored))) : [];
+}
+
+export async function saveTodos(todos: Todo[]): Promise<void> {
+  await AsyncStorage.setItem(TODOS_KEY, JSON.stringify(todos));
 }
