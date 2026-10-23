@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Analysis, SkillAward } from './mockAnalysis';
+import type { Analysis } from './mockAnalysis';
 import { renameLegacyHabit, type Habit, type HabitCounts, type Measure, type MeasureValues } from './routines';
-import type { Learning, Reviews } from './learning';
-import { parseTodos, pruneTodos, type Todo } from './todos';
+import type { Learning, Reviews, ReviewState } from './learning';
+import { isTodo, parseTodos, pruneTodos, type Todo } from './todos';
+import { addQuarantine, parseQuarantine, type QuarantineItem } from './backup';
+import { parseEntries, splitArray, splitRecord } from './storageSafety';
 
 // bonusXp: günlük görevden gelen ek XP; beceriye değil toplam XP'ye eklenir.
 // habitId: kayıt bir rutine tik atılarak oluştuysa o rutinin kimliği.
@@ -14,43 +16,51 @@ const HABITS_KEY = 'skill-journey:habits:v1';
 const REVIEWS_KEY = 'skill-journey:reviews:v1';
 const HABIT_COUNTS_KEY = 'skill-journey:habit-counts:v1';
 const TODOS_KEY = 'skill-journey:todos:v1';
+export const QUARANTINE_KEY = 'skill-journey:quarantine:v1';
 const MEASURES: Measure[] = ['steps', 'duration', 'pages'];
-const validMeasures = (value: unknown): MeasureValues | undefined => {
-  if (!value || typeof value !== 'object') return undefined;
-  const values = Object.fromEntries(MEASURES.filter(key => typeof (value as MeasureValues)[key] === 'number' && (value as MeasureValues)[key]! > 0).map(key => [key, (value as MeasureValues)[key]]));
-  return Object.keys(values).length ? values : undefined;
-};
+
+export async function loadQuarantine(): Promise<QuarantineItem[]> {
+  const stored = await AsyncStorage.getItem(QUARANTINE_KEY);
+  if (!stored) return [];
+  try { return parseQuarantine(JSON.parse(stored)); } catch { return []; }
+}
+
+// Okunamayan veriyi ham haliyle ayırır. Bu yazılamazsa hata fırlatır; o zaman veri yüklenmemiş sayılır
+// ve üzerine yazılmaz (bkz. journey-state'teki hazır olma kontrolü).
+async function quarantine(key: string, raw: string) {
+  const list = await loadQuarantine();
+  const next = addQuarantine(list, { key, at: new Date().toISOString(), raw });
+  if (next !== list) await AsyncStorage.setItem(QUARANTINE_KEY, JSON.stringify(next));
+}
+
+// Bozuk JSON silinmez: karantinaya alınır ve anahtar boş sayılır.
+async function readJson(key: string): Promise<unknown> {
+  const stored = await AsyncStorage.getItem(key);
+  if (!stored) return undefined;
+  try { return JSON.parse(stored); } catch { await quarantine(key, stored); return undefined; }
+}
+
+async function keepRejected(key: string, rejected: unknown[]) {
+  if (rejected.length) await quarantine(key, JSON.stringify(rejected));
+}
 
 export async function loadEntries(): Promise<Entry[]> {
-  const stored = await AsyncStorage.getItem(KEY);
-  if (!stored) return [];
-  const parsed: unknown = JSON.parse(stored);
-  if (!Array.isArray(parsed)) return [];
-  return parsed
-    .filter((entry): entry is Entry => !!entry && typeof entry === 'object' && typeof entry.id === 'string' && typeof entry.description === 'string' && typeof entry.skill === 'string' && typeof entry.xp === 'number' && typeof entry.createdAt === 'string')
-    .map(entry => {
-      const awards: SkillAward[] = Array.isArray(entry.awards) && entry.awards.every(award =>
-        !!award && typeof award.skill === 'string' && typeof award.xp === 'number'
-      ) && entry.awards.length > 0
-        ? entry.awards
-        : [{ skill: entry.skill, xp: entry.xp }];
-      const learning = typeof entry.learning?.term === 'string' && typeof entry.learning?.meaning === 'string' ? { term: entry.learning.term, meaning: entry.learning.meaning } : undefined;
-      const review = Number.isInteger(entry.review?.count) && entry.review!.count > 0 ? { count: entry.review!.count } : undefined;
-      return { ...entry, awards, bonusXp: typeof entry.bonusXp === 'number' && entry.bonusXp > 0 ? entry.bonusXp : undefined, habitId: typeof entry.habitId === 'string' ? entry.habitId : undefined, measures: validMeasures(entry.measures), learning, review };
-    });
+  const { entries, rejected } = parseEntries(await readJson(KEY));
+  await keepRejected(KEY, rejected);
+  return entries;
 }
 
 export async function saveEntries(entries: Entry[]): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(entries));
 }
 
+const isHabit = (habit: unknown): habit is Habit => !!habit && typeof habit === 'object'
+  && ['id', 'title', 'icon', 'skill', 'createdAt'].every(key => typeof (habit as Record<string, unknown>)[key] === 'string');
+
 export async function loadHabits(): Promise<Habit[]> {
-  const stored = await AsyncStorage.getItem(HABITS_KEY);
-  if (!stored) return [];
-  const parsed: unknown = JSON.parse(stored);
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter((habit): habit is Habit => !!habit && typeof habit === 'object'
-    && ['id', 'title', 'icon', 'skill', 'createdAt'].every(key => typeof habit[key] === 'string'))
+  const { items, rejected } = splitArray(await readJson(HABITS_KEY), isHabit);
+  await keepRejected(HABITS_KEY, rejected);
+  return items
     .map(renameLegacyHabit)
     .map(habit => ({ ...habit, target: Number.isInteger(habit.target) && habit.target! >= 1 ? habit.target : undefined, unit: typeof habit.unit === 'string' && habit.unit.trim() ? habit.unit : undefined,
       goalMinutes: Number.isInteger(habit.goalMinutes) && habit.goalMinutes! > 0 ? habit.goalMinutes : undefined,
@@ -61,26 +71,27 @@ export async function saveHabits(habits: Habit[]): Promise<void> {
   await AsyncStorage.setItem(HABITS_KEY, JSON.stringify(habits));
 }
 
+const isReviewState = (state: unknown): state is ReviewState =>
+  !!state && Number.isInteger((state as ReviewState).stage) && typeof (state as ReviewState).due === 'string';
+
 export async function loadReviews(): Promise<Reviews> {
-  const stored = await AsyncStorage.getItem(REVIEWS_KEY);
-  if (!stored) return {};
-  const parsed: unknown = JSON.parse(stored);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  return Object.fromEntries(Object.entries(parsed).filter(([, state]) =>
-    !!state && Number.isInteger(state.stage) && typeof state.due === 'string'));
+  const { items, rejected } = splitRecord(await readJson(REVIEWS_KEY), isReviewState);
+  await keepRejected(REVIEWS_KEY, rejected);
+  return items;
 }
 
 export async function saveReviews(reviews: Reviews): Promise<void> {
   await AsyncStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
 }
 
+type HabitCount = HabitCounts[string];
+const isHabitCount = (state: unknown): state is HabitCount =>
+  !!state && typeof (state as HabitCount).day === 'string' && Number.isInteger((state as HabitCount).count) && (state as HabitCount).count >= 0;
+
 export async function loadHabitCounts(): Promise<HabitCounts> {
-  const stored = await AsyncStorage.getItem(HABIT_COUNTS_KEY);
-  if (!stored) return {};
-  const parsed: unknown = JSON.parse(stored);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  return Object.fromEntries(Object.entries(parsed).filter(([, state]) =>
-    !!state && typeof state.day === 'string' && Number.isInteger(state.count) && state.count >= 0));
+  const { items, rejected } = splitRecord(await readJson(HABIT_COUNTS_KEY), isHabitCount);
+  await keepRejected(HABIT_COUNTS_KEY, rejected);
+  return items;
 }
 
 export async function saveHabitCounts(counts: HabitCounts): Promise<void> {
@@ -88,8 +99,9 @@ export async function saveHabitCounts(counts: HabitCounts): Promise<void> {
 }
 
 export async function loadTodos(): Promise<Todo[]> {
-  const stored = await AsyncStorage.getItem(TODOS_KEY);
-  return stored ? pruneTodos(parseTodos(JSON.parse(stored))) : [];
+  const { items, rejected } = splitArray(await readJson(TODOS_KEY), isTodo);
+  await keepRejected(TODOS_KEY, rejected);
+  return pruneTodos(parseTodos(items));
 }
 
 export async function saveTodos(todos: Todo[]): Promise<void> {

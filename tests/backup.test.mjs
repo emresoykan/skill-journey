@@ -17,11 +17,11 @@ test('yedek: kayıtlar ve rutinler gidip geri gelir, cihaza özgü anahtar girme
   assert.equal(backup.data['skill-journey:entries:v1'], entries);
 });
 
-test('geri yükleme: yedekte olmayan anahtar silinir, veriler karışmaz', () => {
+test('geri yükleme: yedekte olmayan anahtar silinir, veriler karışmaz (karantina hariç)', () => {
   const { backup } = parseBackup(buildBackup({ 'skill-journey:entries:v1': entries }, now));
   const plan = restorePlan(backup);
   assert.deepEqual(plan.set, [['skill-journey:entries:v1', entries]]);
-  assert.deepEqual(plan.remove, BACKUP_KEYS.filter(key => key !== 'skill-journey:entries:v1'));
+  assert.deepEqual(plan.remove, BACKUP_KEYS.filter(key => key !== 'skill-journey:entries:v1' && key !== 'skill-journey:quarantine:v1'));
 });
 
 test('geçersiz dosyalar anlaşılır bir hatayla reddedilir', () => {

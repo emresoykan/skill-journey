@@ -1,4 +1,5 @@
-import { createContext, use, useEffect, useState, type ReactNode } from 'react';
+import { createContext, use, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
 import { loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, type Entry } from './storage';
 import { cleanTodoTitle, todoTitleError, visibleTodos, type Todo } from './todos';
@@ -10,6 +11,7 @@ import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, quest
 import { coin, rewardFeedback, tap } from './feedback';
 export type RewardKind = 'moment' | 'habit' | 'learning' | 'review';
 export type Reward = { id: string; kind: RewardKind; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean; goalReached: boolean; routinesComplete: boolean };
+type Store = 'entries' | 'habits' | 'habitCounts' | 'reviews' | 'todos';
 const normalizeDescription = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
 // Aynı şey farklı günlerde tekrar yazılabilir ("30 dk yürüdüm"); yalnızca aynı gün içinde tekrar engellenir.
 const isSameDayDuplicate = (entries: Entry[], description: string, day: string, exceptId?: string) =>
@@ -40,6 +42,16 @@ function useJourneyState() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [editError, setEditError] = useState('');
+  // Yalnız başarıyla okunmuş veri yeniden yazılır. Okuma başarısızsa ya da henüz bitmediyse yazma reddedilir;
+  // böylece boş sanılan liste diskteki kayıtların üzerine yazılmaz.
+  const ready = useRef(new Set<Store>());
+  const guarded = <T,>(store: Store, save: (value: T) => Promise<void>) => (value: T) =>
+    ready.current.has(store) ? save(value) : Promise.reject(new Error(`${store} yüklenmeden yazılamaz`));
+  const persistEntries = guarded('entries', saveEntries);
+  const persistHabits = guarded('habits', saveHabits);
+  const persistHabitCounts = guarded('habitCounts', saveHabitCounts);
+  const persistReviews = guarded('reviews', saveReviews);
+  const persistTodos = guarded('todos', saveTodos);
   const totalXp = totalXpOf(entries);
   const quest = dailyQuest();
   const questDone = questDoneToday(entries);
@@ -54,12 +66,21 @@ function useJourneyState() {
   }, {})).sort((a, b) => b[1] - a[1]);
 
   useEffect(() => {
-    loadEntries().then(setEntries).catch(() => setError('Kaydedilen anlar yüklenemedi.')).finally(() => setLoading(false));
-    loadHabits().then(setHabits).catch(() => setHabitError('Rutinler yüklenemedi.'));
-    loadHabitCounts().then(setHabitCounts).catch(() => {});
-    loadTodos().then(setTodos).catch(() => setTodoError('Yapılacaklar yüklenemedi.'));
-    loadReviews().then(setReviews).catch(() => {});
+    const loaded = <T,>(store: Store, set: (value: T) => void) => (value: T) => { set(value); ready.current.add(store); };
+    function loadAll() {
+      loadEntries().then(loaded('entries', setEntries)).catch(() => setError('Kaydedilen anlar yüklenemedi. Verilerin silinmedi; sayfayı yenilemeyi dene.')).finally(() => setLoading(false));
+      loadHabits().then(loaded('habits', setHabits)).catch(() => setHabitError('Rutinler yüklenemedi.'));
+      loadHabitCounts().then(loaded('habitCounts', setHabitCounts)).catch(() => {});
+      loadTodos().then(loaded('todos', setTodos)).catch(() => setTodoError('Yapılacaklar yüklenemedi.'));
+      loadReviews().then(loaded('reviews', setReviews)).catch(() => {});
+    }
+    loadAll();
     loadReminder().then(setReminderState).catch(() => {}).finally(() => setReminderLoaded(true));
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    // Uygulama iki sekmede açıksa birinin yazdığı veri ötekinin eski haliyle ezilmesin: değişince baştan okunur.
+    const onStorage = (event: StorageEvent) => { if (!event.key || event.key.startsWith('skill-journey:')) loadAll(); };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   // Rutinler, tikler ya da saat değişince önümüzdeki günlerin hatırlatmaları yeniden kurulur.
@@ -100,7 +121,7 @@ function useJourneyState() {
     const bonusXp = !questDone && result.awards.some(award => award.skill === quest.skill) ? quest.bonus : 0;
     const next: Entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString(), description, ...result, ...(bonusXp ? { bonusXp } : {}), ...extra };
     const updated = [next, ...entries];
-    await saveEntries(updated);
+    await persistEntries(updated);
     const newLevel = level(totalXp + result.xp + bonusXp);
     const nextReward: Reward = {
       id: next.id,
@@ -152,7 +173,7 @@ function useJourneyState() {
     setLearnError('');
     try {
       const nextReviews = { ...reviews, [entry.id]: nextReview(reviewStateOf(entry, reviews), remembered) };
-      await saveReviews(nextReviews);
+      await persistReviews(nextReviews);
       setReviews(nextReviews);
       if (!remembered) { tap(); return; }
       const existing = reviewEntryToday(entries);
@@ -163,7 +184,7 @@ function useJourneyState() {
       }
       const count = existing.review.count + 1;
       const updated = entries.map(item => item.id === existing.id ? { ...item, ...reviewAnalysis(count), description: reviewDescription(count), review: { count } } : item);
-      await saveEntries(updated);
+      await persistEntries(updated);
       setEntries(updated);
       if (level(totalXp + REVIEW_XP) > level(totalXp)) setLevelUpShown(level(totalXp + REVIEW_XP));
       coin();
@@ -210,7 +231,7 @@ function useJourneyState() {
       const done = routines.done.get(habit.id);
       if (done) {
         const updated = entries.filter(entry => entry.id !== done.id);
-        await saveEntries(updated);
+        await persistEntries(updated);
         setEntries(updated);
         tap();
       } else {
@@ -238,7 +259,7 @@ function useJourneyState() {
       const done = routines.done.get(habit.id);
       if (done) {
         const updated = entries.map(entry => entry.id === done.id ? { ...entry, description, measures: extra.measures } : entry);
-        await saveEntries(updated);
+        await persistEntries(updated);
         setEntries(updated);
         tap();
       } else {
@@ -268,13 +289,13 @@ function useJourneyState() {
     setEditNotice(null);
     try {
       const counts = { ...habitCounts, [habit.id]: { day: dayKey(new Date()), count: next } };
-      await saveHabitCounts(counts);
+      await persistHabitCounts(counts);
       setHabitCounts(counts);
       if (next >= target && !done) await recordEntry(habit.title, habitAnalysis(habit), { habitId: habit.id });
       else {
         if (next < target && done) {
           const updated = entries.filter(entry => entry.id !== done.id);
-          await saveEntries(updated);
+          await persistEntries(updated);
           setEntries(updated);
         }
         tap();
@@ -299,7 +320,7 @@ function useJourneyState() {
       const skill = preset?.skill ?? (await analyzeExperience(clean)).skill;
       const habit: Habit = { id: `h-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: clean, icon: preset?.icon ?? '⭐', skill, createdAt: new Date().toISOString(), ...(preset?.target ? { target: preset.target, unit: preset.unit } : {}) };
       const updated = [...habits, habit];
-      await saveHabits(updated);
+      await persistHabits(updated);
       setHabits(updated);
       return true;
     } catch {
@@ -331,7 +352,7 @@ function useJourneyState() {
       // Süre hedefi 0 olunca kalkar.
       const minutes = changes.goalMinutes === undefined ? null : { goalMinutes: changes.goalMinutes > 0 ? Math.min(MAX_GOAL_MINUTES, changes.goalMinutes) : undefined };
       const updated = habits.map(habit => habit.id === id ? { ...habit, title, skill, icon: changes.icon ?? habit.icon, ...goal, ...minutes } : habit);
-      await saveHabits(updated);
+      await persistHabits(updated);
       setHabits(updated);
       // Bugünkü sayı yeni hedefe göre yeniden değerlendirilir: hedef düşüp sayıya inince tik atılır,
       // hedef sayının üstüne çıkınca bugünkü tik geri alınır.
@@ -339,12 +360,12 @@ function useJourneyState() {
         const done = routines.done.get(id);
         const count = habitCountToday(habitCounts, current, !!done);
         const counts = { ...habitCounts, [id]: { day: dayKey(new Date()), count: Math.min(count, goal.target) } };
-        await saveHabitCounts(counts);
+        await persistHabitCounts(counts);
         setHabitCounts(counts);
         if (count >= goal.target && !done && count > 0) await recordEntry(title, habitAnalysis({ ...current, skill }), { habitId: id });
         else if (count < goal.target && done) {
           const remaining = entries.filter(entry => entry.id !== done.id);
-          await saveEntries(remaining);
+          await persistEntries(remaining);
           setEntries(remaining);
         }
       }
@@ -362,7 +383,7 @@ function useJourneyState() {
     if (busy) return;
     try {
       const updated = habits.filter(habit => habit.id !== id);
-      await saveHabits(updated);
+      await persistHabits(updated);
       setHabits(updated);
     } catch {
       setHabitError('Rutin kaldırılamadı. Lütfen tekrar dene.');
@@ -378,7 +399,7 @@ function useJourneyState() {
     try {
       const todo: Todo = { id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: cleanTodoTitle(title), createdAt: new Date().toISOString() };
       const updated = [...todos, todo];
-      await saveTodos(updated);
+      await persistTodos(updated);
       setTodos(updated);
       return true;
     } catch {
@@ -405,7 +426,7 @@ function useJourneyState() {
       const result = await analyzeExperience(todo.title);
       const entryId = await recordEntry(todo.title, result);
       const updated = todos.map(item => item.id === todo.id ? { ...item, doneAt: new Date().toISOString(), entryId } : item);
-      await saveTodos(updated);
+      await persistTodos(updated);
       setTodos(updated);
     } catch {
       setTodoError('İş tamamlanamadı. Lütfen tekrar dene.');
@@ -424,11 +445,11 @@ function useJourneyState() {
     setEditNotice(null);
     try {
       const updated = todos.map(item => item.id === todo.id ? { id: item.id, title: item.title, createdAt: item.createdAt } : item);
-      await saveTodos(updated);
+      await persistTodos(updated);
       setTodos(updated);
       if (todo.entryId && entries.some(entry => entry.id === todo.entryId)) {
         const remaining = entries.filter(entry => entry.id !== todo.entryId);
-        await saveEntries(remaining);
+        await persistEntries(remaining);
         setEntries(remaining);
       }
       tap();
@@ -444,7 +465,7 @@ function useJourneyState() {
     if (busy) return;
     try {
       const updated = todos.filter(todo => todo.id !== id);
-      await saveTodos(updated);
+      await persistTodos(updated);
       setTodos(updated);
     } catch {
       setTodoError('İş silinemedi. Lütfen tekrar dene.');
@@ -457,13 +478,13 @@ function useJourneyState() {
     setTimelineError('');
     try {
       const updated = entries.filter(entry => entry.id !== id);
-      await saveEntries(updated);
+      await persistEntries(updated);
       setEntries(updated);
       // Bugün tamamlanan bir işin kaydı silinirse iş yeniden açılır (rutin tikinin kalkması gibi).
       const linked = todoList.doneToday.find(todo => todo.entryId === id);
       if (linked) {
         const reopened = todos.map(todo => todo.id === linked.id ? { id: todo.id, title: todo.title, createdAt: todo.createdAt } : todo);
-        await saveTodos(reopened);
+        await persistTodos(reopened);
         setTodos(reopened);
       }
       setReward(null);
@@ -508,7 +529,7 @@ function useJourneyState() {
       const awards = capAwards(result.awards, previousXp);
       const xp = awards.reduce((sum, award) => sum + award.xp, 0);
       const updated = entries.map(entry => entry.id === id ? { ...entry, description, ...result, skill: awards[0].skill, awards, xp } : entry);
-      await saveEntries(updated);
+      await persistEntries(updated);
       setEntries(updated);
       setReward(null);
       cancelEditing();
@@ -532,7 +553,7 @@ function useJourneyState() {
       const updated = entries.map(entry => entry.id === entryId
         ? correctSkillAward(entry, fromSkill, toSkill)
         : entry);
-      await saveEntries(updated);
+      await persistEntries(updated);
       setEntries(updated);
       setReward(null);
     } finally {
