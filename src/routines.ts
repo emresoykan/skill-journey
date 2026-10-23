@@ -7,7 +7,8 @@ import type { Entry } from './storage';
 export type Measure = 'steps' | 'duration' | 'pages';
 export type MeasureValues = Partial<Record<Measure, number>>;
 export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string; target?: number; unit?: string; measures?: Measure[]; goalMinutes?: number };
-export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill' | 'target' | 'unit' | 'measures'>;
+// aliases: önerinin eski adları; o adla eklenmiş rutinler de bu öneri sayılır.
+export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill' | 'target' | 'unit' | 'measures'> & { aliases?: string[] };
 
 export const HABIT_XP = 10;
 export const MAX_HABITS = 12;
@@ -18,7 +19,7 @@ export const MAX_GOAL_MINUTES = 600;
 
 export const habitPresets: HabitPreset[] = [
   { icon: '💧', title: 'Su iç', skill: 'Self Care', target: 8, unit: 'bardak' },
-  { icon: '📖', title: '20 dk kitap oku', skill: 'Learning', measures: ['duration', 'pages'] },
+  { icon: '📖', title: 'Kitap okuma', aliases: ['20 dk kitap oku'], skill: 'Learning', measures: ['duration', 'pages'] },
   { icon: '🚶', title: 'Yürüyüş yap', skill: 'Fitness', measures: ['steps', 'duration'] },
   { icon: '🧘', title: 'Meditasyon', skill: 'Self Care' },
   { icon: '🛏️', title: 'Yatağını topla', skill: 'Household' },
@@ -33,6 +34,16 @@ export const habitIcons = ['⭐', '💧', '📖', '🚶', '🧘', '🛏️', '�
 export const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 const isSameDay = (iso: string, now: Date) => dayKey(new Date(iso)) === dayKey(now);
 export const normalizeTitle = (title: string) => title.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
+
+// Rutinin karşılığı olan hazır öneri: adı ya da önerinin eski adlarından biri eşleşir.
+export const presetFor = (title: string) => habitPresets.find(preset =>
+  [preset.title, ...(preset.aliases ?? [])].some(name => normalizeTitle(name) === normalizeTitle(title)));
+
+// Önerinin eski adıyla eklenmiş rutini yeni ada taşır ("20 dk kitap oku" → "Kitap okuma").
+export function renameLegacyHabit<T extends { title: string }>(habit: T): T {
+  const preset = presetFor(habit.title);
+  return preset && normalizeTitle(preset.title) !== normalizeTitle(habit.title) ? { ...habit, title: preset.title } : habit;
+}
 
 // Rutine tik atmak, habitId taşıyan sıradan bir kayıt oluşturur; böylece XP, seri,
 // günlük hedef ve rozetler ayrı bir sistem gerektirmeden çalışır.
@@ -69,13 +80,13 @@ export function habitTitleError(title: string, habits: Habit[]): string | null {
 // Günlük hedef: rutinin kendi hedefi; yoksa aynı adlı hazır önerininki (hedef eklenmeden önce eklenmiş "Su iç" de
 // 8 bardak sayılır); o da yoksa tek tik.
 export function habitGoal(habit: Habit): { target: number; unit: string } {
-  const preset = habitPresets.find(item => normalizeTitle(item.title) === normalizeTitle(habit.title));
+  const preset = presetFor(habit.title);
   return { target: habit.target ?? preset?.target ?? 1, unit: habit.unit ?? preset?.unit ?? 'kez' };
 }
 
 // Tik atarken sorulan ölçüler: rutinin kendi listesi, yoksa aynı adlı hazır önerininki.
 export function habitMeasures(habit: Habit): Measure[] {
-  return habit.measures ?? habitPresets.find(item => normalizeTitle(item.title) === normalizeTitle(habit.title))?.measures ?? [];
+  return habit.measures ?? presetFor(habit.title)?.measures ?? [];
 }
 
 // Süre dakika olarak saklanır. Üst sınırlar yazım hatasını yakalar (ör. fazladan sıfır).
@@ -148,7 +159,7 @@ export function habitCountToday(counts: HabitCounts, habit: Habit, done: boolean
 }
 
 export const availablePresets = (habits: Habit[]) =>
-  habitPresets.filter(preset => !habits.some(habit => normalizeTitle(habit.title) === normalizeTitle(preset.title)));
+  habitPresets.filter(preset => !habits.some(habit => presetFor(habit.title) === preset));
 
 // Günlük rutin hatırlatıcısı. Bildirimler önümüzdeki günler için tek tek kurulur;
 // böylece o günün rutinleri tamamsa o günün hatırlatması hiç gelmez.

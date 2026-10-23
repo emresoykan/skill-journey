@@ -1,7 +1,7 @@
 // Günlük rutinlerin tik, ilerleme ve ad doğrulama kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { availablePresets, dayKey, formatMeasures, formatTime, habitMeasures, measureError, parseAmount, toMinutes, weeklyTotals, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
+import { availablePresets, renameLegacyHabit, presetFor, dayKey, formatMeasures, formatTime, habitMeasures, measureError, parseAmount, toMinutes, weeklyTotals, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
 
 const now = new Date(2026, 9, 21, 15, 0);
 const yesterday = new Date(2026, 9, 20, 9, 0);
@@ -113,6 +113,19 @@ test('ölçüler: hazır öneriden gelir, kendi yazdığın rutinde yoktur', () 
   assert.deepEqual(habitMeasures(habit('h1', '20 dk kitap oku')), ['duration', 'pages']);
   assert.deepEqual(habitMeasures(habit('h1', 'Spor yap')), ['duration']);
   assert.deepEqual(habitMeasures(habit('h1', 'Bitki sula')), []);
+});
+
+test('kitap okuma: yeni ad, eski adla eklenmiş rutin de tanınır ve yeni ada taşınır', () => {
+  assert.equal(presetFor('Kitap okuma')?.title, 'Kitap okuma');
+  assert.equal(presetFor('20 dk kitap oku')?.title, 'Kitap okuma');
+  assert.deepEqual(habitMeasures(habit('h1', 'Kitap okuma')), ['duration', 'pages']);
+  const legacy = habit('h1', '20 dk kitap oku');
+  assert.equal(renameLegacyHabit(legacy).title, 'Kitap okuma');
+  assert.equal(renameLegacyHabit(legacy).id, 'h1');
+  // Kullanıcının kendi verdiği ad değişmez.
+  assert.equal(renameLegacyHabit(habit('h2', '30 dk roman oku')).title, '30 dk roman oku');
+  // Eski adlı rutin varken "Kitap okuma" önerisi tekrar çıkmaz.
+  assert.ok(!availablePresets([legacy]).some(preset => preset.title === 'Kitap okuma'));
 });
 
 test('sayı okuma: binlik ayırıcı, saatte ondalık, boş ve geçersiz', () => {
