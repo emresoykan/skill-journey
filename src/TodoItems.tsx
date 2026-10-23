@@ -5,8 +5,8 @@ import type { Todo } from './todos';
 
 // "Bugün ne yaptın" kartındaki açık işler. Tik atılan iş kartın kayıt listesine geçer (beceri + XP).
 export function OpenTodos() {
-  const { todoList } = useJourney();
-  if (!todoList.open.length) return null;
+  const { todoList, loading } = useJourney();
+  if (loading || !todoList.open.length) return null;
   return <View style={s.wrap}>
     <Text style={s.label}>YAPILACAKLAR · {todoList.open.length}</Text>
     {todoList.open.map(todo => <TodoRow key={todo.id} todo={todo} />)}

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BACKUP_KEYS, backupFileName, buildBackup, parseBackup, restorePlan, type Backup, type BackupSummary } from './backup';
+import { loadQuarantine, QUARANTINE_KEY } from './storage';
 
 const teal = '#166B65';
 const LAST_BACKUP_KEY = 'skill-journey:last-backup';
@@ -41,9 +42,11 @@ export function BackupCard() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
+  const [quarantined, setQuarantined] = useState(0);
 
   useEffect(() => {
     AsyncStorage.getItem(LAST_BACKUP_KEY).then(value => { if (value) setLastBackup(new Date(value)); }).catch(() => {});
+    loadQuarantine().then(list => setQuarantined(list.length)).catch(() => {});
   }, []);
 
   if (Platform.OS !== 'web') return null;
@@ -74,7 +77,7 @@ export function BackupCard() {
     if (!pending) return;
     setWorking(true); setError('');
     try {
-      const plan = restorePlan(pending.backup);
+      const plan = restorePlan(pending.backup, await AsyncStorage.getItem(QUARANTINE_KEY));
       await AsyncStorage.multiSet(plan.set);
       await AsyncStorage.multiRemove(plan.remove);
       // Uygulama bütün verileri baştan okusun diye sayfa yenilenir.
@@ -89,9 +92,10 @@ export function BackupCard() {
     <Text style={s.title}>💾 Yedekleme</Text>
     <Text style={s.text}>Kayıtların yalnız bu tarayıcıda saklanıyor. Tarayıcı verisi silinirse ya da telefon değişirse yedek dosyasıyla geri dönebilirsin.</Text>
     <Text style={s.last}>{lastBackup ? `Son yedek: ${formatDate(lastBackup)}` : 'Henüz yedek almadın.'}</Text>
+    {quarantined ? <Text style={s.warning}>{`⚠️ Okunamayan ${quarantined} veri parçası silinmedi, ayrı tutuluyor. Yedek dosyasına da giriyor; kurtarmak için dosyayı saklayabilirsin.`}</Text> : null}
     {pending ? <View style={s.confirm}>
       <Text style={s.confirmText}>
-        {`${formatDate(pending.summary.exportedAt)} tarihli yedekte ${pending.summary.entries} kayıt ve ${pending.summary.habits} rutin var. Geri yüklersen şu anki kayıtların ve rutinlerin bu yedekteki haliyle değişecek.`}
+        {`${formatDate(pending.summary.exportedAt)} tarihli yedekte ${pending.summary.entries} kayıt ve ${pending.summary.habits} rutin var. Geri yüklersen bu cihazdaki kayıtların, rutinlerin, yapılacakların ve tekrarların bu yedekteki haliyle değişecek; yedekten sonra eklediklerin silinir.`}
       </Text>
       <View style={s.actions}>
         <Pressable accessibilityRole="button" disabled={working} onPress={() => setPending(null)}><Text style={s.cancel}>Vazgeç</Text></Pressable>
@@ -123,4 +127,5 @@ const s = StyleSheet.create({
   danger: { color: '#A33D3D', fontSize: 12, fontWeight: '800', padding: 6 },
   message: { color: teal, fontSize: 12, lineHeight: 18, marginTop: 10 },
   error: { color: '#B34242', fontSize: 12, lineHeight: 18, marginTop: 10 },
+  warning: { color: '#664708', backgroundColor: '#FCEBB5', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12, lineHeight: 17, marginTop: 10, overflow: 'hidden' },
 });

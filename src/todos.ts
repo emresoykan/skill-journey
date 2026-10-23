@@ -33,10 +33,15 @@ export function pruneTodos(todos: Todo[], now = new Date()): Todo[] {
   return todos.filter(todo => !todo.doneAt || new Date(todo.doneAt).getTime() >= limit);
 }
 
+export const isTodo = (todo: unknown): todo is Todo => {
+  const item = todo as Todo;
+  return !!item && typeof item === 'object' && typeof item.id === 'string' && typeof item.title === 'string' && typeof item.createdAt === 'string';
+};
+
 export function parseTodos(value: unknown): Todo[] {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((todo): todo is Todo => !!todo && typeof todo === 'object' && typeof todo.id === 'string' && typeof todo.title === 'string' && typeof todo.createdAt === 'string')
+    .filter(isTodo)
     .map(todo => ({
       id: todo.id,
       title: todo.title,

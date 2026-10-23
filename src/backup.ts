@@ -11,7 +11,26 @@ export const BACKUP_KEYS = [
   'skill-journey:reminder:v1',
   'skill-journey:sound:v1',
   'skill-journey:entry-mode:v1',
+  'skill-journey:quarantine:v1',
 ] as const;
+const QUARANTINE_KEY = 'skill-journey:quarantine:v1';
+
+// Okunamayan (bozuk JSON) ya da şekli geçersiz veri silinmez, buraya ham haliyle ayrılır:
+// key = geldiği saklama anahtarı, raw = ham metin. Yedek dosyasına da girer.
+export type QuarantineItem = { key: string; at: string; raw: string };
+
+export function parseQuarantine(value: unknown): QuarantineItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is QuarantineItem => !!item && typeof item === 'object'
+    && typeof item.key === 'string' && typeof item.at === 'string' && typeof item.raw === 'string');
+}
+
+// Aynı veri her açılışta tekrar ayrılmasın diye anahtar + ham metin aynıysa eklenmez (liste aynen döner).
+export function addQuarantine(list: QuarantineItem[], item: QuarantineItem): QuarantineItem[] {
+  return list.some(existing => existing.key === item.key && existing.raw === item.raw) ? list : [...list, item];
+}
+
+export const mergeQuarantine = (list: QuarantineItem[], incoming: QuarantineItem[]) => incoming.reduce(addQuarantine, list);
 
 const FORMAT = 'skill-journey-backup';
 const VERSION = 1;
@@ -67,14 +86,22 @@ export function parseBackup(text: string): { backup: Backup; summary: BackupSumm
   };
 }
 
+const readQuarantine = (value: string | null | undefined) => {
+  try { return value ? parseQuarantine(JSON.parse(value)) : []; } catch { return []; }
+};
+
 // Geri yüklemede her anahtar yedekteki haline getirilir: yedekte olmayan anahtar silinir,
-// böylece eski ve yeni veriler karışmaz.
-export function restorePlan(backup: Backup): { set: [string, string][]; remove: string[] } {
+// böylece eski ve yeni veriler karışmaz. Karantinadaki (okunamamış) veri ise hiç silinmez;
+// cihazdaki ile yedektekiler birleştirilir.
+export function restorePlan(backup: Backup, currentQuarantine?: string | null): { set: [string, string][]; remove: string[] } {
   const set: [string, string][] = [];
   const remove: string[] = [];
   for (const key of BACKUP_KEYS) {
+    if (key === QUARANTINE_KEY) continue;
     const value = backup.data[key];
     if (typeof value === 'string') set.push([key, value]); else remove.push(key);
   }
+  const quarantine = mergeQuarantine(readQuarantine(currentQuarantine), readQuarantine(backup.data[QUARANTINE_KEY]));
+  if (quarantine.length) set.push([QUARANTINE_KEY, JSON.stringify(quarantine)]);
   return { set, remove };
 }
