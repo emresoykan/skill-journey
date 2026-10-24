@@ -1,10 +1,12 @@
-// Mock analizin beceri eşleşmelerini sabitleyen örnek cümleler.
+// Yerel beceri motorunun eşleşmelerini sabitleyen örnek cümleler.
 // Çalıştırma: npm test (Node 22.18+ .ts dosyalarını doğrudan içe aktarabilir).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scoreExperience } from '../src/mockAnalysis.ts';
+import { ENTRY_XP_CAP, isWithin, scoreExperience } from '../src/skillEngine.ts';
 
 // [cümle, gelmesi gereken beceriler, gelmemesi gereken beceriler]
+// Beklenen beceri ya da onun bir alt becerisi yeterlidir (ör. Finans yerine Finansal Raporlama);
+// yasak beceri ve alt becerileri gelmemelidir.
 const cases = [
   // Doğru eşleşmeler: bunlar bozulmamalı.
   ['Toplantıda yeni bütçeyi ekibe sundum ve sorularını dinledim', ['Communication'], []],
@@ -81,8 +83,8 @@ const cases = [
 for (const [text, expected, forbidden] of cases) {
   test(text, () => {
     const skills = scoreExperience(text).awards.map(award => award.skill);
-    for (const skill of expected) assert.ok(skills.includes(skill), `${skill} bekleniyordu, gelen: ${skills.join(', ')}`);
-    for (const skill of forbidden) assert.ok(!skills.includes(skill), `${skill} gelmemeliydi, gelen: ${skills.join(', ')}`);
+    for (const skill of expected) assert.ok(skills.some(got => isWithin(got, skill)), `${skill} bekleniyordu, gelen: ${skills.join(', ')}`);
+    for (const skill of forbidden) assert.ok(!skills.some(got => isWithin(got, skill)), `${skill} gelmemeliydi, gelen: ${skills.join(', ')}`);
   });
 }
 
@@ -98,7 +100,8 @@ for (const [text, primary] of [
 test('en fazla üç beceri ve pozitif XP döner', () => {
   const result = scoreExperience('Ekiple toplantıda sunum yaptım, hatayı çözdüm, rapor yazdım ve yeni şeyler öğrendim');
   assert.ok(result.awards.length <= 3);
-  assert.ok(result.awards.every(award => award.xp > 0 && award.xp <= 18));
+  assert.ok(result.awards.every(award => award.xp > 0));
+  assert.ok(result.xp <= ENTRY_XP_CAP);
   assert.equal(result.xp, result.awards.reduce((sum, award) => sum + award.xp, 0));
   assert.equal(result.skill, result.awards[0].skill);
 });

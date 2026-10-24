@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { displaySkill } from './mockAnalysis';
+import { displaySkill } from './skillEngine';
 import { findPastSelfPair } from './pastSelfPair';
 import type { Entry } from './storage';
 

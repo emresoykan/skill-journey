@@ -1,4 +1,4 @@
-import { displaySkill } from './mockAnalysis';
+import { displaySkill } from './skillEngine';
 import type { Entry } from './storage';
 
 export const LEVEL_XP = 100;

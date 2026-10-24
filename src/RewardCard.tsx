@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
-import { displaySkill } from './mockAnalysis';
-import type { Reward } from './journey-state';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { entryXp } from './game';
+import { displaySkill } from './skillEngine';
+import { SkillExplain } from './SkillExplain';
+import { useJourney, type Reward } from './journey-state';
 
 const useNative = Platform.OS !== 'web';
 const teal = '#166B65';
@@ -50,8 +52,19 @@ export const isSpecialReward = (reward: Reward) => reward.leveledUp || rewardPer
 
 // Kayıt başına yeniden bağlanır (key={reward.id}); sayaç ve animasyonlar sıfırdan başlar.
 export function RewardCard({ reward }: { reward: Reward }) {
-  const total = reward.analysis.xp + reward.bonusXp;
+  // Kart kaydın güncel halini gösterir: beceri çıkarılır ya da değiştirilirse XP de güncellenir.
+  const { entries } = useJourney();
+  const entry = entries.find(item => item.id === reward.id);
+  const awards = entry?.awards ?? reward.analysis.awards;
+  const total = entry ? entryXp(entry) : reward.analysis.xp + reward.bonusXp;
   const shown = useCountUp(total);
+  const [explaining, setExplaining] = useState(false);
+  const explain = entry?.suggestions ? <>
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: explaining }} onPress={() => setExplaining(!explaining)}>
+      <Text style={s.why}>{explaining ? 'Açıklamayı gizle' : 'Neden bu beceriler? · Değiştir'}</Text>
+    </Pressable>
+    {explaining ? <SkillExplain entry={entry} /> : null}
+  </> : null;
   const [enter] = useState(() => new Animated.Value(0));
   useEffect(() => {
     Animated.spring(enter, { toValue: 1, friction: 5, tension: 70, useNativeDriver: useNative }).start();
@@ -60,9 +73,12 @@ export function RewardCard({ reward }: { reward: Reward }) {
   const pop = { opacity: enter, transform: [{ scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] };
 
   if (!isSpecialReward(reward)) {
-    return <Animated.View style={[s.compact, pop]}>
-      <Text style={s.compactXp}>+{shown} XP</Text>
-      <Text style={s.compactSkills} numberOfLines={2}>{reward.analysis.awards.map(award => `${displaySkill(award.skill)} +${award.xp}`).join(' · ')}</Text>
+    return <Animated.View style={[s.compactWrap, pop]}>
+      <View style={s.compact}>
+        <Text style={s.compactXp}>+{shown} XP</Text>
+        <Text style={s.compactSkills} numberOfLines={2}>{awards.map(award => `${displaySkill(award.skill)} +${award.xp}`).join(' · ')}</Text>
+      </View>
+      {explain}
     </Animated.View>;
   }
 
@@ -70,21 +86,24 @@ export function RewardCard({ reward }: { reward: Reward }) {
     <Text style={s.eyebrow}>{reward.leveledUp ? `🎉 SEVİYE ${reward.newLevel}!` : '⚡ XP KAZANDIN'}</Text>
     <Text style={s.total}>+{shown} <Text style={s.totalUnit}>XP</Text></Text>
     <Text style={s.reason}>{reward.analysis.reason}</Text>
-    {reward.analysis.awards.map((award, i) => <PopIn key={award.skill} index={i}>
+    {awards.map((award, i) => <PopIn key={award.skill} index={i}>
       <View style={s.awardRow}>
         <Text style={s.awardSkill}>{displaySkill(award.skill)}</Text>
         <Text style={s.awardXp}>+{award.xp} XP</Text>
       </View>
     </PopIn>)}
-    {perks.map((perk, i) => <PopIn key={perk} index={reward.analysis.awards.length + i}>
+    {perks.map((perk, i) => <PopIn key={perk} index={awards.length + i}>
       <Text style={s.perk}>{perk}</Text>
     </PopIn>)}
+    {explain}
   </Animated.View>;
 }
 
 const s = StyleSheet.create({
   card: { backgroundColor: '#FFF7DF', borderColor: '#F3D990', borderWidth: 2, borderRadius: 20, padding: 18, marginTop: 14, marginBottom: 4 },
-  compact: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF7DF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, marginTop: 12 },
+  compactWrap: { backgroundColor: '#FFF7DF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, marginTop: 12 },
+  compact: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  why: { color: '#166B65', fontSize: 12, fontWeight: '800', marginTop: 10, paddingVertical: 4 },
   compactXp: { color: '#8B5B00', fontSize: 18, fontWeight: '800' },
   compactSkills: { flex: 1, color: teal, fontSize: 13, fontWeight: '700' },
   eyebrow: { color: '#8B5B00', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },

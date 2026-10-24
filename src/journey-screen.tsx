@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { displaySkill } from './mockAnalysis';
+import { displaySkill } from './skillEngine';
 import { ProgressChart } from './ProgressChart';
 import { SkillEvidence } from './SkillEvidence';
 import { PastSelf } from './PastSelf';

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { availableSkills, displaySkill } from './mockAnalysis';
+import { displaySkill } from './skillEngine';
+import { SkillPicker } from './SkillPicker';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
@@ -74,18 +75,8 @@ export function SkillEvidence({ entries, busy, onCorrectAward }: Props) {
           </View>
           <Text style={s.description}>{entry.description}</Text>
           {correctingId === entry.id ? <View>
-            <Text style={s.chooseTitle}>Bu deneyim hangi beceriye ait?</Text>
-            <View style={s.options}>
-              {availableSkills.filter(skill => skill !== selectedSkill).map(skill => (
-                <Pressable key={skill} accessibilityRole="button" disabled={busy || saving} onPress={() => chooseSkill(entry.id, skill)} style={s.option}>
-                  <Text style={s.optionText}>{displaySkill(skill)}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <SkillPicker exclude={entry.awards.map(item => item.skill)} disabled={busy || saving} onPick={skill => chooseSkill(entry.id, skill)} onCancel={() => { setCorrectingId(null); setError(''); }} />
             {error ? <Text style={s.error}>{error}</Text> : null}
-            <Pressable accessibilityRole="button" onPress={() => { setCorrectingId(null); setError(''); }}>
-              <Text style={s.cancel}>Vazgeç</Text>
-            </Pressable>
           </View> : <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setCorrectingId(entry.id); setError(''); }}>
             <Text style={s.correct}>Beceriyi düzelt</Text>
           </Pressable>}
@@ -114,10 +105,5 @@ const s = StyleSheet.create({
   evidenceXp: { color: teal, fontSize: 12, fontWeight: '800' },
   description: { color: '#182637', fontSize: 12, lineHeight: 18, marginTop: 8 },
   correct: { color: teal, fontSize: 11, fontWeight: '800', marginTop: 9, paddingVertical: 4 },
-  chooseTitle: { color: '#182637', fontSize: 12, fontWeight: '700', marginTop: 12, marginBottom: 8 },
-  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  option: { borderColor: '#BEDDD1', borderWidth: 1, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 6 },
-  optionText: { color: teal, fontSize: 11, fontWeight: '700' },
   error: { color: '#B34242', fontSize: 11, marginTop: 8 },
-  cancel: { color: '#657482', fontSize: 11, fontWeight: '700', marginTop: 10, paddingVertical: 4 },
 });

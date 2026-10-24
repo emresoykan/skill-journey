@@ -1,6 +1,6 @@
 // "Öğrendiklerim": kavram/kelime kayıtları ve aralıklı tekrarın saf mantığı.
 // Yalnız tip içe aktarır; npm test doğrudan çalıştırabilir.
-import type { Analysis } from './mockAnalysis';
+import type { Analysis } from './skillEngine';
 import type { Entry } from './storage';
 
 export const LEARN_XP = 12;

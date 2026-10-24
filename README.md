@@ -13,14 +13,14 @@ Windows üzerinde geliştirilebilen Expo + React Native + TypeScript MVP'si. Ayn
 
 - Home ekranında seviye ve toplam XP ilerlemesi
 - “What happened today?” deneyim girişi
-- `src/mockAnalysis.ts` içinde anahtar sözcüklere dayalı yerel mock analiz
+- `src/skillEngine.ts`: beceri kataloğu (alan › beceri › alt beceri) ve açıklanabilir yerel beceri motoru
 - Skill, XP ve level-up sonucu
 - En sık görülen beceriler ve en yeniden eskiye timeline
 - `AsyncStorage` ile cihazda kalıcı kayıt
 
-Mock analiz gerçek yapay zekâ değildir. Anahtar sözcük eşleşmesi ve metin uzunluğuna göre sonuç üretir; API anahtarı veya hesap gerekmez. XP her 100 puanda bir seviye artırır.
+Beceri motoru yapay zekâ değildir; cihazda çalışan kurallarla metindeki kelimelerden en fazla 3 beceri önerir. Her önerinin dayanağı (eşleşen kelimeler), güveni ve gerekçesi kayıtla saklanır; kullanıcı öneriyi çıkarabilir ya da değiştirebilir. XP metnin uzunluğuna değil deneyimin derinliğine bağlıdır (ilk temas 5 · öğrendi 10 · pratik 15 · uyguladı 20 · üretti 30 · öğretti 35 · ustalık kanıtı 40; ana beceri tam, diğerleri yarım, kayıt başına en fazla 60). Aynı gün 6.–10. serbest kayıt yarım, sonrası dörtte bir XP alır. Eski kayıtların XP'si değiştirilmez. XP her 100 puanda bir seviye artırır.
 
-Eşleşme kuralları `tests/analysis.test.mjs` içindeki örnek cümlelerle sınanır: `npm test` (Node 22.18+ gerekir). Yeni bir kök eklerken alakasız kelimelere takılıyorsa `src/mockAnalysis.ts` içindeki `falseFriends` listesine istisna ekleyin ve örneği teste yazın.
+Eşleşme kuralları `tests/analysis.test.mjs` içindeki örnek cümlelerle sınanır: `npm test` (Node 22.18+ gerekir). Yeni bir kök eklerken alakasız kelimelere takılıyorsa `src/skillEngine.ts` içindeki `falseFriends` listesine istisna ekleyin ve örneği teste yazın. Motorun kanıt, derinlik ve XP kuralları `tests/skillEngine.test.mjs` ile sabitlenir.
 
 ## Yedekleme
 

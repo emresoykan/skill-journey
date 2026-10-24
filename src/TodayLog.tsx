@@ -2,11 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DAILY_GOAL, entryXp } from './game';
-import { displaySkill } from './mockAnalysis';
+import { displaySkill } from './skillEngine';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { useJourney } from './journey-state';
 import { MicButton } from './MicButton';
 import { OpenTodos } from './TodoItems';
+import { SkillExplain } from './SkillExplain';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
@@ -95,6 +96,7 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
             <Text style={s.itemXp}>+{entryXp(entry)}</Text>
           </Pressable>
           {openId === entry.id ? <View style={s.itemActions}><EntryActionButtons entry={entry} /></View> : null}
+          {openId === entry.id && entry.suggestions ? <SkillExplain entry={entry} /> : null}
           <EntryDeleteConfirm entry={entry} />
           <EntryEditNotice entry={entry} />
         </>}

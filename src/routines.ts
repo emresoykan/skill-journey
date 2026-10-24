@@ -1,5 +1,5 @@
 // Günlük rutinlerin saf mantığı. Yalnız tip içe aktarır; npm test doğrudan çalıştırabilir.
-import type { Analysis } from './mockAnalysis';
+import type { Analysis } from './skillEngine';
 import type { Entry } from './storage';
 
 // target: günde kaç kez (ör. 8 bardak su); yoksa tek tik. unit: sayının birimi ("bardak").
