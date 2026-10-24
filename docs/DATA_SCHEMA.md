@@ -41,6 +41,15 @@ type Entry = {
   measures?: { steps?: number; duration?: number; pages?: number };
   learning?: { term: string; meaning: string };
   review?: { count: number }; // günün tekrar kaydı: kaç kavram hatırlandı
+  // Yalnız 2026-10-24 sonrası, yeni motorla oluşan kayıtlarda (eski kayıtlar değiştirilmedi):
+  tz?: string;            // kaydın yazıldığı IANA saat dilimi ("Europe/Istanbul")
+  engine?: 'rules@2';     // öneriyi üreten motor ve sürümü
+  depth?: 'exposure' | 'learned' | 'practiced' | 'applied' | 'produced' | 'taught' | 'mastery';
+  depthEvidence?: string; // derinliği belirleyen kelime ("hazırladım")
+  suggestions?: { skill: string; xp: number; confidence: number; evidence: string[]; rationale: string }[];
+                          // motorun ilk önerisi; değişmez. Kabul edilen hali `awards`'tır
+                          // (çıkarılan öneri awards'ta yoktur, değiştirilen yerine yenisi gelir).
+  xpNote?: string;        // XP neden azaldı (aynı gün çok kayıt)
 };
 ```
 

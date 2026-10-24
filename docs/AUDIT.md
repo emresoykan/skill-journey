@@ -163,7 +163,38 @@ type XpEvent = { entryId: string; skillId?: string; amount: number; reason: 'exp
   - iki sekmede ayrı kayıt → ikisi de duruyor;
   - yedekle/geri yükle, yapılacaklar ve mod hatırlama akışları bozulmadı.
 
-**Kalan sınırlamalar:**
+## 9. Faz 2a (yerel beceri motoru) — yapılanlar
+
+Kararlar (kullanıcı, 2026-10-24): yerel kurallar (LLM yok), eski XP korunur, İngilizce sonra.
+
+- `src/skillEngine.ts` eski `src/mockAnalysis.ts`'in yerini aldı:
+  - 45 becerilik katalog: 8 alan, üst/alt beceri ilişkisi. Eski 20 beceri kimliği korundu.
+  - Kurallarda güçlü, zayıf ve destek kanıt ayrımı var: "created a forecast" yaratıcılık sayılmaz,
+    "tahmin" tek başına öneri doğurmaz.
+  - Her öneride beceri, üst kategori yolu, güven, dayanak kelimeler ve gerekçe var.
+  - Derinlik fiilden algılanır ve XP'yi belirler. Uzunluk bonusu kaldırıldı.
+  - Kayıt başına üst sınır var; aynı gün çok kayıtta XP azalır.
+  - Neredeyse aynı metin (%80 kelime ortaklığı) aynı gün tekrar sayılır.
+  - Alt beceri bulunduysa üst beceri ayrıca puanlanmaz.
+- `src/SkillExplain.tsx` ve `src/SkillPicker.tsx`: "Neden bu beceriler?" paneli ödül kartında ve
+  Bugün listesindeki kayıtta açılır. Buradan öneri çıkarılabilir, değiştirilebilir ya da kullanıcının
+  kendi becerisi yazılabilir. Gelişim'deki "Beceriyi düzelt" de aynı seçiciyi kullanır.
+- Görev bonusu alt becerileri de sayar (Sunum → İletişim görevi). Düzeltme, düzenleme ya da çıkarma
+  sonrası görev becerisi kalmadıysa bonus düşer (Faz 0'daki ek bulgu kapandı).
+- Yeni kayıtlar `tz` saklar. Gün hesabı henüz bunu kullanmıyor (Faz 2b).
+- Örnek: "Today I created and reviewed a cash flow forecast…" → Nakit Akış Tahmini 30 XP
+  (güven yüksek; dayanak "cash flow", "forecast") ve Analitik Düşünme 15 XP; derinlik "üretti".
+  Promptta beklenen *Finansal Analiz* üst beceri olduğu için ayrıca puanlanmıyor. *Hazine Yönetimi*
+  ise metinde dayanağı olmadığı için önerilmiyor.
+
+**Faz 2b'ye kalanlar:**
+
+- Gün hesabını `tz`'ye sabitleme.
+- Rozetlerin kalıcı kilidi.
+- Yazmadan önce yeniden okuma.
+- Kaydetmeden önce öneri onayı (şu an önce kaydediliyor, sonra düzeltiliyor).
+
+**Kalan sınırlamalar (Faz 1):**
 
 - Sekmeler arası yenileme, iki sekmenin *aynı anda* (milisaniyeler içinde) yazmasını engellemez.
   Bunun için yazmadan önce yeniden okuma gerekir (Faz 2 şema işiyle birlikte).
