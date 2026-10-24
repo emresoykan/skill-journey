@@ -53,3 +53,16 @@ test('geri yükleme karantinayı silmez; cihazdaki ve yedektekini birleştirir',
   assert.ok(!old.remove.includes('skill-journey:quarantine:v1'));
   assert.equal(JSON.parse(Object.fromEntries(old.set)['skill-journey:quarantine:v1']).length, 1);
 });
+
+test('motor ayrıntıları doğrulanır; bozuksa kayıt okunur ama ayrıntı düşer', () => {
+  const good = entry('g', { engine: 'rules@2', depth: 'produced', depthEvidence: 'hazırladım', tz: 'Europe/Istanbul', suggestions: [{ skill: 'Learning', xp: 12, confidence: 0.5, evidence: ['öğren'], rationale: 'r' }] });
+  const bad = entry('b', { engine: 'başka', depth: 'uçtu', suggestions: [{ skill: 1 }], xpNote: 5 });
+  const [okEntry, badEntry] = parseEntries([good, bad]).entries;
+  assert.equal(okEntry.depth, 'produced');
+  assert.equal(okEntry.suggestions.length, 1);
+  assert.equal(okEntry.tz, 'Europe/Istanbul');
+  assert.equal(badEntry.engine, undefined);
+  assert.equal(badEntry.depth, undefined);
+  assert.equal(badEntry.suggestions, undefined);
+  assert.equal(badEntry.xpNote, undefined);
+});

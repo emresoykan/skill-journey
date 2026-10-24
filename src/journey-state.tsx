@@ -1,21 +1,26 @@
 import { createContext, use, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
-import { analyzeExperience, displaySkill, type Analysis } from './mockAnalysis';
+import { analyzeExperience, displaySkill, isNearDuplicate, isWithin, type Analysis } from './skillEngine';
 import { loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, type Entry } from './storage';
 import { cleanTodoTitle, todoTitleError, visibleTodos, type Todo } from './todos';
 import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
 import { dayKey, DEFAULT_REMINDER, formatMeasures, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_GOAL_MINUTES, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type MeasureValues, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
-import { capAwards, correctSkillAward } from './skillCorrections';
+import { capAwards, correctSkillAward, removeSkillAward } from './skillCorrections';
 import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
 import { coin, rewardFeedback, tap } from './feedback';
 export type RewardKind = 'moment' | 'habit' | 'learning' | 'review';
 export type Reward = { id: string; kind: RewardKind; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean; goalReached: boolean; routinesComplete: boolean };
 type Store = 'entries' | 'habits' | 'habitCounts' | 'reviews' | 'todos';
-const normalizeDescription = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
-// Aynı şey farklı günlerde tekrar yazılabilir ("30 dk yürüdüm"); yalnızca aynı gün içinde tekrar engellenir.
+// Aynı şey farklı günlerde tekrar yazılabilir ("30 dk yürüdüm"); yalnızca aynı gün içinde aynı ya da
+// neredeyse aynı metin engellenir.
 const isSameDayDuplicate = (entries: Entry[], description: string, day: string, exceptId?: string) =>
-  entries.some(entry => entry.id !== exceptId && isToday(entry.createdAt, new Date(day)) && normalizeDescription(entry.description) === normalizeDescription(description));
+  entries.some(entry => entry.id !== exceptId && isToday(entry.createdAt, new Date(day)) && isNearDuplicate(entry.description, description));
+// Bugün elle yazılmış (rutin, öğrenme ve tekrar olmayan) kayıt sayısı; aynı gün çok kayıtta XP azalır.
+const freeEntriesToday = (entries: Entry[]) => todayEntries(entries).filter(entry => !entry.habitId && !entry.learning && !entry.review).length;
+// Görev bonusu, kayıt görev becerisini (ya da alt becerisini) kaybederse düşer; görev o gün yeniden yapılabilir.
+const withQuestCheck = (entry: Entry): Entry =>
+  entry.bonusXp && !entry.awards.some(award => isWithin(award.skill, dailyQuest(new Date(entry.createdAt)).skill)) ? { ...entry, bonusXp: undefined } : entry;
 function useJourneyState() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -118,8 +123,9 @@ function useJourneyState() {
       totals[award.skill] = (totals[award.skill] ?? 0) + award.xp;
       return totals;
     }, {});
-    const bonusXp = !questDone && result.awards.some(award => award.skill === quest.skill) ? quest.bonus : 0;
-    const next: Entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString(), description, ...result, ...(bonusXp ? { bonusXp } : {}), ...extra };
+    const bonusXp = !questDone && result.awards.some(award => isWithin(award.skill, quest.skill)) ? quest.bonus : 0;
+    // tz: kaydın yazıldığı saat dilimi; gün hesabının ileride bu güne sabitlenebilmesi için saklanır.
+    const next: Entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, description, ...result, ...(bonusXp ? { bonusXp } : {}), ...extra };
     const updated = [next, ...entries];
     await persistEntries(updated);
     const newLevel = level(totalXp + result.xp + bonusXp);
@@ -210,7 +216,7 @@ function useJourneyState() {
     setReward(null);
     setEditNotice(null);
     try {
-      const result = await analyzeExperience(description);
+      const result = await analyzeExperience(description, freeEntriesToday(entries));
       await recordEntry(description, result);
       // Analiz sırasında yeni bir şey yazılmaya başlandıysa onu silme.
       setDraft(current => current.trim() === description ? '' : current);
@@ -423,7 +429,7 @@ function useJourneyState() {
     setReward(null);
     setEditNotice(null);
     try {
-      const result = await analyzeExperience(todo.title);
+      const result = await analyzeExperience(todo.title, freeEntriesToday(entries));
       const entryId = await recordEntry(todo.title, result);
       const updated = todos.map(item => item.id === todo.id ? { ...item, doneAt: new Date().toISOString(), entryId } : item);
       await persistTodos(updated);
@@ -528,7 +534,7 @@ function useJourneyState() {
       const previousXp = before?.xp ?? result.xp;
       const awards = capAwards(result.awards, previousXp);
       const xp = awards.reduce((sum, award) => sum + award.xp, 0);
-      const updated = entries.map(entry => entry.id === id ? { ...entry, description, ...result, skill: awards[0].skill, awards, xp } : entry);
+      const updated = entries.map(entry => entry.id === id ? withQuestCheck({ ...entry, description, ...result, skill: awards[0].skill, awards, xp }) : entry);
       await persistEntries(updated);
       setEntries(updated);
       setReward(null);
@@ -551,18 +557,33 @@ function useJourneyState() {
     setBusy(true);
     try {
       const updated = entries.map(entry => entry.id === entryId
-        ? correctSkillAward(entry, fromSkill, toSkill)
+        ? withQuestCheck(correctSkillAward(entry, fromSkill, toSkill))
         : entry);
       await persistEntries(updated);
       setEntries(updated);
-      setReward(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Önerilen bir beceriyi kayıttan çıkarır (XP'siyle). Ödül kartı kaydın güncel halini gösterir.
+  async function rejectAward(entryId: string, skill: string) {
+    if (busy) throw new Error('Başka bir işlem sürüyor.');
+    const target = entries.find(entry => entry.id === entryId);
+    if (!target) throw new Error('Kayıt bulunamadı.');
+    const changed = withQuestCheck(removeSkillAward(target, skill));
+    setBusy(true);
+    try {
+      const updated = entries.map(entry => entry.id === entryId ? changed : entry);
+      await persistEntries(updated);
+      setEntries(updated);
     } finally {
       setBusy(false);
     }
   }
 
 
-  return { todoList,todoError,setTodoError,addTodo,completeTodo,reopenTodo,removeTodo,reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward };
+  return { todoList,todoError,setTodoError,addTodo,completeTodo,reopenTodo,removeTodo,reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward,rejectAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Analysis } from './mockAnalysis';
+import type { Analysis } from './skillEngine';
 import { renameLegacyHabit, type Habit, type HabitCounts, type Measure, type MeasureValues } from './routines';
 import type { Learning, Reviews, ReviewState } from './learning';
 import { isTodo, parseTodos, pruneTodos, type Todo } from './todos';
@@ -10,7 +10,8 @@ import { parseEntries, splitArray, splitRecord } from './storageSafety';
 // habitId: kayıt bir rutine tik atılarak oluştuysa o rutinin kimliği.
 // measures: rutin tikiyle girilen ölçüler (adım, dakika, sayfa).
 // learning: "Öğrendiklerim" kaydının kavramı ve anlamı. review: günün tekrar oturumu (kaç kavram hatırlandı).
-export type Entry = Analysis & { id: string; createdAt: string; description: string; bonusXp?: number; habitId?: string; measures?: MeasureValues; learning?: Learning; review?: { count: number } };
+// tz: kaydın yazıldığı IANA saat dilimi (yeni kayıtlarda).
+export type Entry = Analysis & { id: string; createdAt: string; tz?: string; description: string; bonusXp?: number; habitId?: string; measures?: MeasureValues; learning?: Learning; review?: { count: number } };
 const KEY = 'skill-journey:entries:v1';
 const HABITS_KEY = 'skill-journey:habits:v1';
 const REVIEWS_KEY = 'skill-journey:reviews:v1';

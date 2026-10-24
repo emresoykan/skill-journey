@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { habitStreak } from './game';
 import { useJourney } from './journey-state';
-import { displaySkill } from './mockAnalysis';
+import { displaySkill } from './skillEngine';
 import { availablePresets, formatDuration, formatMeasures, formatTime, GOAL_STEP_MINUTES, HABIT_XP, habitGoal, habitIcons, habitMeasures, MAX_GOAL_MINUTES, MAX_HABITS, MAX_TARGET, measureError, measureNames, parseAmount, reminderTimes, toMinutes, weeklyTotals, type Habit, type HabitPreset, type MeasureValues } from './routines';
 import { reminderNote, remindersSupported } from './reminders';
 import { MicButton } from './MicButton';

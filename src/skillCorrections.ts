@@ -22,6 +22,14 @@ export function correctSkillAward(entry: Entry, fromSkill: string, toSkill: stri
   };
 }
 
+// Önerilen bir beceri kayıttan çıkarılır; XP'si de düşer. Son beceri çıkarılamaz (yerine başkası seçilir).
+export function removeSkillAward(entry: Entry, skill: string): Entry {
+  const awards = entry.awards.filter(award => award.skill !== skill);
+  if (awards.length === entry.awards.length) throw new Error('Beceri kayıtta bulunamadı.');
+  if (!awards.length) throw new Error('Son beceri çıkarılamaz; istersen değiştir.');
+  return { ...entry, skill: awards[0].skill, awards, xp: awards.reduce((sum, award) => sum + award.xp, 0) };
+}
+
 // Düzenleme becerileri yeniden belirler ama XP'yi artıramaz: aksi halde aynı kaydı
 // uzatarak puan kasılabilir. Toplam ilk kazanılan XP'yi aşarsa beceriler orantılı küçültülür.
 export function capAwards(awards: Entry['awards'], maxXp: number): Entry['awards'] {
