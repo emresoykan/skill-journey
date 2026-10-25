@@ -5,9 +5,9 @@ Tüm veriler cihazda, `@react-native-async-storage/async-storage` ile saklanır.
 kayıt gitmez. Tek istisna web hatırlatıcısıdır: `push-worker`'a cihaz kimliği, push aboneliği, saat,
 saat dilimi ve "bugün kalan rutin sayısı" gider (`src/reminders.ts`). Kayıt metinleri gitmez.
 
-Her anahtarın değeri bir JSON metnidir. Anahtar adındaki `:v1` şema sürümüdür; şu ana kadar
-hiçbir anahtar `v2`'ye geçmedi. Alan düzeyindeki eski biçimler okuma sırasında onarılır
-(bkz. "Okuma kuralları").
+Her anahtarın değeri bir JSON metnidir. Anahtar adındaki `:v1` anahtarın biçim sürümüdür.
+Verinin genel şema sürümü `skill-journey:meta:v1` içindedir; bekleyen göçler (`src/migrations.ts`)
+uygulama açılırken, veriler okunmadan önce çalışır (bkz. "Göçler").
 
 | Anahtar | Biçim | Kaynak | Yedeğe girer |
 |---|---|---|---|
@@ -20,6 +20,9 @@ hiçbir anahtar `v2`'ye geçmedi. Alan düzeyindeki eski biçimler okuma sıras�
 | `skill-journey:sound:v1` | `"on"` / `"off"` | `src/sounds.ts` | evet |
 | `skill-journey:entry-mode:v1` | `"done"` / `"todo"` | `src/TodayLog.tsx` | evet |
 | `skill-journey:quarantine:v1` | `QuarantineItem[]` | `src/storage.ts`, `src/backup.ts` | evet (geri yüklemede silinmez, birleştirilir) |
+| `skill-journey:badges:v1` | `{ [rozetId]: ISO \| '' }` | `src/storage.ts`, `src/game.ts` | evet |
+| `skill-journey:meta:v1` | `{ schemaVersion, migratedAt }` | `src/storage.ts` | evet (eski yedek geri yüklenince göçler yeniden çalışır) |
+| `skill-journey:snapshot:v1` | `{ beforeVersion, at, data }` | `src/storage.ts` | hayır (son göç öncesi kopya) |
 | `skill-journey:last-backup` | ISO tarih | `src/BackupCard.tsx` | hayır |
 | `skill-journey:push-id` | UUID | `src/reminders.ts` | hayır (cihaza özgü) |
 | `skill-journey:push-synced` | `"1"` | `src/reminders.ts` | hayır |
@@ -66,7 +69,29 @@ type ReviewState = { stage: number; due: 'YYYY-MM-DD' | '' }; // '' = ustalaşı
 type QuarantineItem = { key: string; at: string; raw: string }; // okunamayan verinin ham metni
 ```
 
-Gün sınırları (bugün, seri, gruplama, tekrar günü) cihazın o anki yerel saatine göre hesaplanır.
+Gün sınırları (bugün, seri, gruplama, tekrar günü) `src/dates.ts` ile hesaplanır. Kaydın günü,
+`tz` varsa o saat dilimine göre sabittir; yoksa (eski kayıtlar) cihazın yerel günüdür. "Bugün"
+cihazın yerel günüdür. Rozetler kayıtlardan hesaplanır ama kazanılan rozet `badges:v1`'e yazılır ve
+kayıt silinse de açık kalır.
+
+## Göçler (`src/migrations.ts`)
+
+| Sürüm | Ne yapar |
+|---|---|
+| 1 | `awards` alanı olmayan kayıtlara `[{ skill, xp }]` ekler; "20 dk kitap oku" rutinini "Kitap okuma" yapar |
+
+Kurallar:
+- Göç öğe silmez.
+- Okuyamadığı ya da tanımadığı veriye dokunmaz.
+- İkinci kez çalışınca değişiklik üretmez.
+- Çalışmadan önce etkilenen anahtarların ham hali `snapshot:v1`'e yazılır.
+- Hata verirse durur ve sürüm ilerlemez.
+
+## Yazma kuralı
+
+Uygulama bir anahtarı yazmadan önce diskteki halin, kendisinin en son okuduğu ya da yazdığı halle
+aynı olduğunu kontrol eder. Farklıysa (başka sekme yazmışsa) yazmaz, veriyi yeniden okur ve
+kullanıcıdan işlemi tekrarlamasını ister.
 
 ## Okuma kuralları (`src/storage.ts`, `src/storageSafety.ts`)
 

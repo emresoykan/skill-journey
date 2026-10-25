@@ -42,7 +42,7 @@ ama tarayıcıda ayrıca denenmedi · **[HİPOTEZ]** doğrulanmadı.
 | 7 | **Saat dilimi saklanmıyor.** `createdAt` UTC tutuluyor, gün hesabı cihazın o anki yerel saatine göre yapılıyor. Başka saat dilimine geçince geçmiş günler, seriler ve tekrar günleri kayabilir. | `src/game.ts`, `src/learning.ts`, `src/storage.ts` | Faz 2 (şema) |
 | 8 | **Rozetler ve seri saklanmıyor, her seferinde yeniden hesaplanıyor.** Kayıt silinince rozet kilitleniyor; yeniden kazanınca "yeni rozet" kutlaması tekrar çıkıyor. | `src/game.ts` (`badgeProgress`, `newlyUnlocked`) | Faz 2/5 |
 | 9 | **React #418 hydration hatası** (`/`, `/memories`). Statik HTML ile istemci ilk render'ı uyuşmuyor; tarayıcı konsolunda görülüyor. | statik export + tarih/yerel veri bağımlı render | Açık |
-| 10 | **Lint hatası:** `import/no-unresolved 'expo-notifications'`. `npx expo lint` her çalıştırmada 1 hata veriyor. | `src/reminders.native.ts` | Açık (zararsız ama CI'ya lint eklemeyi engelliyor) |
+| 10 | ~~**Lint hatası:** `import/no-unresolved 'expo-notifications'`.~~ **Düzeltme (Faz 2b):** Kodda sorun yoktu. Hata, paket kurulmadan önce oluşmuş yerel `.expo/cache/eslint` önbelleğinden geliyordu; `npx expo lint --no-cache` temiz. Bu madde yanlış bulguydu. | — | Kapandı |
 
 Ek bulgular [KODDAN]:
 
@@ -187,15 +187,31 @@ Kararlar (kullanıcı, 2026-10-24): yerel kurallar (LLM yok), eski XP korunur, �
   Promptta beklenen *Finansal Analiz* üst beceri olduğu için ayrıca puanlanmıyor. *Hazine Yönetimi*
   ise metinde dayanağı olmadığı için önerilmiyor.
 
-**Faz 2b'ye kalanlar:**
+## 10. Faz 2b (veri temeli) — yapılanlar
 
-- Gün hesabını `tz`'ye sabitleme.
-- Rozetlerin kalıcı kilidi.
-- Yazmadan önce yeniden okuma.
+- **Saat dilimine sabit gün** (`src/dates.ts`). Kayıt, yazıldığı saat dilimindeki gününde kalır.
+  - Bugün, seri, en uzun seri, gün gruplama, grafik, rutin tikleri, tekrar günü ve "geçmişteki sen"
+    aynı fonksiyonu kullanıyor.
+  - Eski kayıtlarda (`tz` yok) davranış değişmedi.
+  - Testler İstanbul, New York, Tokyo ve UTC saat dilimlerinde koşturuldu.
+- **Sürümlü şema ve göç** (`src/migrations.ts`, `storage.ts → runMigrations`).
+  - `skill-journey:meta:v1` şema sürümünü tutar.
+  - Her göçten önce etkilenen anahtarlar `skill-journey:snapshot:v1`'e kopyalanır.
+  - Göçler hiçbir öğeyi silmez, tanımadığı veriye dokunmaz ve tekrarlanabilir.
+  - Göç 1, okumada yapılan iki onarımı kalıcı yazar: eski kayda beceri listesi, eski rutin adı.
+- **Kalıcı rozetler** (`skill-journey:badges:v1`). Kazanılan rozet, kayıt silinse de açık kalır ve
+  yeniden kutlanmaz. Kalıcı listeden önce kazanılanlar tarihsiz işaretlenir. Rozet adı artık iki
+  satıra sığıyor (kesilme düzeltildi).
+- **Yazmadan önce karşılaştırma** (`storage.ts → writeJson`). Disk, bu sekmenin son bildiği halden
+  farklıysa yazma reddedilir (`StorageConflictError`). Güncel hal yüklenir, kullanıcıya "tekrar dene"
+  uyarısı çıkar. Bu, Faz 1'de kalan "iki sekme aynı anda yazar" açığını kapatır.
+- **Test altyapısı.** `tests/ts-resolve.mjs` sayesinde saf modüller birbirini içe aktarabiliyor.
+  Yeni testler: `dates`, `game` (seri, seviye, rozet, saat dilimi), `migrations`. Toplam 166 test.
+
+**Hâlâ açık:**
+
+- React #418 hydration uyarısı. Büyük olasılıkla statik HTML'in derleme günündeki tarihe göre
+  üretilmesinden kaynaklanıyor (hafta etiketleri, günün görevi) [HİPOTEZ]. Faz 3'te ele alınacak.
 - Kaydetmeden önce öneri onayı (şu an önce kaydediliyor, sonra düzeltiliyor).
-
-**Kalan sınırlamalar (Faz 1):**
-
-- Sekmeler arası yenileme, iki sekmenin *aynı anda* (milisaniyeler içinde) yazmasını engellemez.
-  Bunun için yazmadan önce yeniden okuma gerekir (Faz 2 şema işiyle birlikte).
+- Ayrı bir XP olay defteri yok. XP kayıtlardan türetiliyor; silme ve düzenleme tutarlı.
 - Karantinadaki veriyi uygulama içinden kurtarma ekranı yok. Veri yedek dosyasında ham olarak duruyor.
