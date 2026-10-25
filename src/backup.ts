@@ -12,6 +12,9 @@ export const BACKUP_KEYS = [
   'skill-journey:sound:v1',
   'skill-journey:entry-mode:v1',
   'skill-journey:quarantine:v1',
+  'skill-journey:badges:v1',
+  // Şema sürümü: göç öncesi alınmış bir yedek geri yüklenince sürüm de geri gelir ve göçler yeniden çalışır.
+  'skill-journey:meta:v1',
 ] as const;
 const QUARANTINE_KEY = 'skill-journey:quarantine:v1';
 

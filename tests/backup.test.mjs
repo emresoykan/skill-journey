@@ -1,6 +1,7 @@
 // Yedek dosyasının kurulup geri okunmasını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 import { BACKUP_KEYS, backupFileName, buildBackup, parseBackup, restorePlan } from '../src/backup.ts';
 
 const now = new Date(2026, 9, 23, 21, 5);
@@ -42,8 +43,8 @@ test('dosya adı tarihi taşır', () => {
 });
 
 // Kaynakta yeni bir saklama anahtarı eklenip yedeğe konmazsa bu test uyarır.
-import { readdirSync, readFileSync } from 'node:fs';
-const NOT_BACKED_UP = new Set(['skill-journey:push-id', 'skill-journey:push-synced', 'skill-journey:last-backup']);
+// snapshot: göç öncesi kopya; verinin ikinci kopyası olduğu için yedeğe girmez.
+const NOT_BACKED_UP = new Set(['skill-journey:push-id', 'skill-journey:push-synced', 'skill-journey:last-backup', 'skill-journey:snapshot:v1']);
 test('kaynaktaki tüm veri anahtarları yedeğe giriyor', () => {
   const dir = new URL('../src/', import.meta.url);
   const keys = new Set(readdirSync(dir).filter(name => /\.tsx?$/.test(name))

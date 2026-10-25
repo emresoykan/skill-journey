@@ -21,7 +21,7 @@ import { Confetti } from './Confetti';
 import { setSoundEnabled, useSoundEnabled } from './sounds';
 const teal = '#166B65';
 export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memories' }) {
-  const { analyzing,entries,draft,setDraft,reward,quest,questDone,streak,today,busy,loading,error,setError,timelineError,editingId,totalXp,skillTotals,addMoment,correctAward } = useJourney();
+  const { earnedBadges,syncNotice,dismissSyncNotice,analyzing,entries,draft,setDraft,reward,quest,questDone,streak,today,busy,loading,error,setError,timelineError,editingId,totalXp,skillTotals,addMoment,correctAward } = useJourney();
   const soundOn = useSoundEnabled();
   const [query, setQuery] = useState('');
   const terms = query.trim().toLocaleLowerCase('tr-TR').split(/\s+/).filter(Boolean);
@@ -37,9 +37,10 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
           <Pressable accessibilityRole="button" accessibilityLabel={soundOn ? 'Sesi kapat' : 'Sesi aç'} hitSlop={8} onPress={() => setSoundEnabled(!soundOn)} style={s.soundButton}><Text style={s.soundIcon}>{soundOn ? '🔊' : '🔇'}</Text></Pressable>
           <Text style={s.levelPill}>SEVİYE {level(totalXp)}</Text>
         </View></View>
+        {syncNotice ? <Pressable accessibilityRole="button" accessibilityHint="Uyarıyı kapatır" onPress={dismissSyncNotice} style={s.sync}><Text style={s.syncText}>{`🔄 ${syncNotice}  ✕`}</Text></Pressable> : null}
         {section === 'growth' ? <>
         <PlayerCard totalXp={totalXp} streak={streak} />
-        {!loading ? <Badges entries={entries} /> : null}
+        {!loading ? <Badges entries={entries} earned={earnedBadges} /> : null}
         <RoutineStreaks />
         <WeeklyTotals />
         {!loading ? <ProgressChart entries={entries} /> : null}
@@ -127,5 +128,7 @@ const s = StyleSheet.create({
   skillTrack: { height: 7, borderRadius: 7, backgroundColor: '#DDECE5', overflow: 'hidden', marginTop: 9, marginBottom: 6 },
   skillFill: { height: 7, backgroundColor: teal },
   awardSummary: { color: teal, fontSize: 11, lineHeight: 17, marginTop: 9 },
+  sync: { backgroundColor: '#FCEBB5', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
+  syncText: { color: '#664708', fontSize: 12, fontWeight: '700', lineHeight: 17 },
   analyzing: { color: '#8B5B00', backgroundColor: '#FFF7DF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginTop: 12, fontSize: 13, fontWeight: '700', overflow: 'hidden' },
 });

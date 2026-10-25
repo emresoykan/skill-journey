@@ -2,15 +2,15 @@ import { StyleSheet, Text, View } from 'react-native';
 import { badgeProgress } from './game';
 import type { Entry } from './storage';
 
-export function Badges({ entries }: { entries: Entry[] }) {
-  const list = badgeProgress(entries);
+export function Badges({ entries, earned }: { entries: Entry[]; earned: Record<string, string> }) {
+  const list = badgeProgress(entries, earned);
   const unlocked = list.filter(badge => badge.unlocked).length;
   return <View style={{ marginBottom: 26 }}>
     <View style={s.head}><Text style={s.section}>Rozetler</Text><Text style={s.count}>{unlocked} / {list.length}</Text></View>
     <View style={s.grid}>
       {list.map(badge => <View key={badge.id} style={[s.badge, !badge.unlocked && s.locked]} accessibilityLabel={`${badge.title}: ${badge.description}${badge.unlocked ? ', kazanıldı' : `, ${badge.current}/${badge.goal}`}`}>
         <Text style={[s.icon, !badge.unlocked && { opacity: 0.3 }]}>{badge.unlocked ? badge.icon : '🔒'}</Text>
-        <Text style={s.title} numberOfLines={1}>{badge.title}</Text>
+        <Text style={s.title} numberOfLines={2}>{badge.title}</Text>
         <Text style={s.desc} numberOfLines={2}>{badge.description}</Text>
         {!badge.unlocked ? <View style={s.track}><View style={[s.fill, { width: `${badge.current / badge.goal * 100}%` }]} /></View> : null}
       </View>)}

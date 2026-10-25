@@ -1,21 +1,22 @@
 import { createContext, use, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { analyzeExperience, displaySkill, isNearDuplicate, isWithin, type Analysis } from './skillEngine';
-import { loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, type Entry } from './storage';
+import { loadBadges, loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, runMigrations, saveBadges, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, StorageConflictError, type EarnedBadges, type Entry } from './storage';
 import { cleanTodoTitle, todoTitleError, visibleTodos, type Todo } from './todos';
 import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
 import { dayKey, DEFAULT_REMINDER, formatMeasures, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_GOAL_MINUTES, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type MeasureValues, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
 import { capAwards, correctSkillAward, removeSkillAward } from './skillCorrections';
-import { DAILY_GOAL, dailyQuest, getStreak, isToday, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, type Badge } from './game';
+import { entryDay, dayKey as localDay } from './dates';
+import { DAILY_GOAL, dailyQuest, getStreak, level, newlyUnlocked, questDoneToday, todayEntries, totalXpOf, withEarnedBadges, type Badge } from './game';
 import { coin, rewardFeedback, tap } from './feedback';
 export type RewardKind = 'moment' | 'habit' | 'learning' | 'review';
 export type Reward = { id: string; kind: RewardKind; analysis: Analysis; bonusXp: number; newSkills: string[]; leveledSkills: string[]; leveledUp: boolean; newLevel: number; newBadges: Badge[]; streak: number; streakExtended: boolean; goalReached: boolean; routinesComplete: boolean };
-type Store = 'entries' | 'habits' | 'habitCounts' | 'reviews' | 'todos';
+type Store = 'entries' | 'habits' | 'habitCounts' | 'reviews' | 'todos' | 'badges';
 // Aynı şey farklı günlerde tekrar yazılabilir ("30 dk yürüdüm"); yalnızca aynı gün içinde aynı ya da
 // neredeyse aynı metin engellenir.
 const isSameDayDuplicate = (entries: Entry[], description: string, day: string, exceptId?: string) =>
-  entries.some(entry => entry.id !== exceptId && isToday(entry.createdAt, new Date(day)) && isNearDuplicate(entry.description, description));
+  entries.some(entry => entry.id !== exceptId && entryDay(entry) === day && isNearDuplicate(entry.description, description));
 // Bugün elle yazılmış (rutin, öğrenme ve tekrar olmayan) kayıt sayısı; aynı gün çok kayıtta XP azalır.
 const freeEntriesToday = (entries: Entry[]) => todayEntries(entries).filter(entry => !entry.habitId && !entry.learning && !entry.review).length;
 // Görev bonusu, kayıt görev becerisini (ya da alt becerisini) kaybederse düşer; görev o gün yeniden yapılabilir.
@@ -27,6 +28,8 @@ function useJourneyState() {
   const [habitError, setHabitError] = useState('');
   const [habitCounts, setHabitCounts] = useState<HabitCounts>({});
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadges>({});
+  const [syncNotice, setSyncNotice] = useState('');
   const [todoError, setTodoError] = useState('');
   const [reviews, setReviews] = useState<Reviews>({});
   const [learnError, setLearnError] = useState('');
@@ -50,13 +53,25 @@ function useJourneyState() {
   // Yalnız başarıyla okunmuş veri yeniden yazılır. Okuma başarısızsa ya da henüz bitmediyse yazma reddedilir;
   // böylece boş sanılan liste diskteki kayıtların üzerine yazılmaz.
   const ready = useRef(new Set<Store>());
+  const reload = useRef<() => void>(() => {});
+  const badgesSynced = useRef(false);
+  // Veri bu arada başka bir sekmede değiştiyse yazma reddedilir (StorageConflictError): güncel hal
+  // yeniden okunur ve kullanıcıdan işlemi tekrarlaması istenir.
   const guarded = <T,>(store: Store, save: (value: T) => Promise<void>) => (value: T) =>
-    ready.current.has(store) ? save(value) : Promise.reject(new Error(`${store} yüklenmeden yazılamaz`));
+    !ready.current.has(store) ? Promise.reject(new Error(`${store} yüklenmeden yazılamaz`))
+      : save(value).catch(cause => {
+        if (cause instanceof StorageConflictError) {
+          setSyncNotice('Veriler başka bir sekmede değişmişti; güncel hali yüklendi. Son işlemi tekrar dene.');
+          reload.current();
+        }
+        throw cause;
+      });
   const persistEntries = guarded('entries', saveEntries);
   const persistHabits = guarded('habits', saveHabits);
   const persistHabitCounts = guarded('habitCounts', saveHabitCounts);
   const persistReviews = guarded('reviews', saveReviews);
   const persistTodos = guarded('todos', saveTodos);
+  const persistBadges = guarded('badges', saveBadges);
   const totalXp = totalXpOf(entries);
   const quest = dailyQuest();
   const questDone = questDoneToday(entries);
@@ -78,8 +93,11 @@ function useJourneyState() {
       loadHabitCounts().then(loaded('habitCounts', setHabitCounts)).catch(() => {});
       loadTodos().then(loaded('todos', setTodos)).catch(() => setTodoError('Yapılacaklar yüklenemedi.'));
       loadReviews().then(loaded('reviews', setReviews)).catch(() => {});
+      loadBadges().then(loaded('badges', setEarnedBadges)).catch(() => {});
     }
-    loadAll();
+    reload.current = loadAll;
+    // Önce bekleyen veri göçleri (bkz. migrations.ts); başarısız olsa da veriler okunur.
+    runMigrations().catch(cause => { if (__DEV__) console.warn('[göç] tamamlanamadı', cause); }).finally(loadAll);
     loadReminder().then(setReminderState).catch(() => {}).finally(() => setReminderLoaded(true));
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     // Uygulama iki sekmede açıksa birinin yazdığı veri ötekinin eski haliyle ezilmesin: değişince baştan okunur.
@@ -87,6 +105,16 @@ function useJourneyState() {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  // Kayıtlarla açılan rozetler kalıcı listeye yazılır; kayıt silinse de rozet geri alınmaz.
+  // İlk eşitlemede (kalıcı listeden önce kazanılmış rozetler) tarih bilinmediği için boş bırakılır.
+  useEffect(() => {
+    if (!ready.current.has('entries') || !ready.current.has('badges')) return;
+    const next = withEarnedBadges(entries, earnedBadges, badgesSynced.current ? new Date().toISOString() : '');
+    badgesSynced.current = true;
+    if (next) persistBadges(next).then(() => setEarnedBadges(next)).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, earnedBadges]);
 
   // Rutinler, tikler ya da saat değişince önümüzdeki günlerin hatırlatmaları yeniden kurulur.
   useEffect(() => {
@@ -138,7 +166,7 @@ function useJourneyState() {
       leveledSkills: result.awards.filter(award => level((previousSkillXp[award.skill] ?? 0) + award.xp) > level(previousSkillXp[award.skill] ?? 0)).map(award => award.skill),
       leveledUp: newLevel > level(totalXp),
       newLevel,
-      newBadges: newlyUnlocked(entries, updated),
+      newBadges: newlyUnlocked(entries, updated, earnedBadges),
       streak: getStreak(updated).count,
       streakExtended: !streak.activeToday,
       goalReached: today.length < DAILY_GOAL && today.length + 1 >= DAILY_GOAL,
@@ -204,7 +232,7 @@ function useJourneyState() {
   async function addMoment() {
     const description = draft.trim();
     if (!description) { setError('Önce bugün yaptığın bir şeyi yaz.'); return; }
-    if (isSameDayDuplicate(entries, description, new Date().toISOString())) {
+    if (isSameDayDuplicate(entries, description, localDay(new Date()))) {
       setError('Bunu bugün zaten ekledin.');
       return;
     }
@@ -419,7 +447,7 @@ function useJourneyState() {
   // Tamamlanan iş, elle yazılmış gibi bugünün kaydı olur: beceriler işin adından çıkarılır, XP ve seri işler.
   async function completeTodo(todo: Todo) {
     if (busy || todo.doneAt) return;
-    if (isSameDayDuplicate(entries, todo.title, new Date().toISOString())) {
+    if (isSameDayDuplicate(entries, todo.title, localDay(new Date()))) {
       setTodoError('Bunu bugün zaten kaydettin.');
       return;
     }
@@ -521,7 +549,7 @@ function useJourneyState() {
     const description = editDraft.trim();
     if (!description) { setEditError('Kayıt boş olamaz.'); return; }
     const editing = entries.find(entry => entry.id === id);
-    if (editing && isSameDayDuplicate(entries, description, editing.createdAt, id)) {
+    if (editing && isSameDayDuplicate(entries, description, entryDay(editing), id)) {
       setEditError('Aynı gün içinde bu kayıt zaten var.');
       return;
     }
@@ -583,7 +611,7 @@ function useJourneyState() {
   }
 
 
-  return { todoList,todoError,setTodoError,addTodo,completeTodo,reopenTodo,removeTodo,reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward,rejectAward };
+  return { earnedBadges,syncNotice,dismissSyncNotice: () => setSyncNotice(''),todoList,todoError,setTodoError,addTodo,completeTodo,reopenTodo,removeTodo,reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward,rejectAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {
