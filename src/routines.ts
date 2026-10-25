@@ -1,4 +1,5 @@
 // Günlük rutinlerin saf mantığı. Yalnız tip içe aktarır; npm test doğrudan çalıştırabilir.
+import { addDaysToKey, dayKey as localDay, entryDay, isValidDate } from './dates';
 import type { Analysis } from './skillEngine';
 import type { Entry } from './storage';
 
@@ -31,8 +32,9 @@ export const habitPresets: HabitPreset[] = [
 // Düzenleme modunda rutine seçilebilecek simgeler.
 export const habitIcons = ['⭐', '💧', '📖', '🚶', '🧘', '🛏️', '📝', '🏋️', '📵', '🥗', '💊', '🦷', '☀️', '🌙', '🧹', '🎸', '💻', '🚴', '🙏', '❤️'];
 
+// Sayılı rutinlerin günlük sayısı (habit-counts) bu biçimde saklanır ("2026-10-5"); kayıtlı veriyle uyum için değişmez.
 export const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-const isSameDay = (iso: string, now: Date) => dayKey(new Date(iso)) === dayKey(now);
+const isSameDay = (entry: Entry, now: Date) => entryDay(entry) === localDay(now);
 export const normalizeTitle = (title: string) => title.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
 
 // Rutinin karşılığı olan hazır öneri: adı ya da önerinin eski adlarından biri eşleşir.
@@ -50,7 +52,7 @@ export function renameLegacyHabit<T extends { title: string }>(habit: T): T {
 export function habitEntriesToday(entries: Entry[], now = new Date()): Map<string, Entry> {
   const done = new Map<string, Entry>();
   for (const entry of entries) {
-    if (entry.habitId && isSameDay(entry.createdAt, now) && !done.has(entry.habitId)) done.set(entry.habitId, entry);
+    if (entry.habitId && isSameDay(entry, now) && !done.has(entry.habitId)) done.set(entry.habitId, entry);
   }
   return done;
 }
@@ -133,14 +135,15 @@ export function formatMeasures(values: MeasureValues | undefined): string {
 // Son 7 gün (bugün dahil): rutinin kaç gün yapıldığı ve girilen ölçülerin toplamı.
 // Sayılı rutinde (su) gün, hedefe ulaşılan gündür; günlük sayılar saklanmadığı için toplam bardak yoktur.
 export function weeklyTotals(habit: Habit, entries: Entry[], now = new Date()) {
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+  const today = localDay(now);
+  const start = addDaysToKey(today, -6);
   const days = new Set<string>();
   const totals: MeasureValues = {};
   for (const entry of entries) {
-    if (entry.habitId !== habit.id) continue;
-    const date = new Date(entry.createdAt);
-    if (date < start || date > now) continue;
-    days.add(dayKey(date));
+    if (entry.habitId !== habit.id || !isValidDate(entry.createdAt)) continue;
+    const day = entryDay(entry);
+    if (day < start || day > today) continue;
+    days.add(day);
     for (const measure of ['steps', 'duration', 'pages'] as Measure[]) {
       const value = entry.measures?.[measure];
       if (value) totals[measure] = (totals[measure] ?? 0) + value;

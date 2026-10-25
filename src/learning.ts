@@ -1,5 +1,6 @@
 // "Öğrendiklerim": kavram/kelime kayıtları ve aralıklı tekrarın saf mantığı.
 // Yalnız tip içe aktarır; npm test doğrudan çalıştırabilir.
+import { addDaysToKey, dayKey, entryDay } from './dates';
 import type { Analysis } from './skillEngine';
 import type { Entry } from './storage';
 
@@ -14,8 +15,7 @@ export type Learning = { term: string; meaning: string };
 export type ReviewState = { stage: number; due: string };
 export type Reviews = Record<string, ReviewState>;
 
-export const dayKey = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+export { dayKey };
 const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 
 export const learningDescription = ({ term, meaning }: Learning) => `${term} — ${meaning}`;
@@ -40,8 +40,9 @@ export function nextReview(state: ReviewState, remembered: boolean, now = new Da
   return { stage, due: stage >= MASTERED_STAGE ? '' : dayKey(addDays(now, REVIEW_INTERVALS[stage])) };
 }
 
+// İlk tekrar, kavramın öğrenildiği günün (kayıt saat dilimine göre) ertesi günü.
 export const reviewStateOf = (entry: Entry, reviews: Reviews): ReviewState =>
-  reviews[entry.id] ?? initialReview(new Date(entry.createdAt));
+  reviews[entry.id] ?? { stage: 0, due: addDaysToKey(entryDay(entry), REVIEW_INTERVALS[0]) };
 
 export const isMastered = (state: ReviewState) => state.stage >= MASTERED_STAGE;
 
@@ -57,7 +58,7 @@ export function dueLearnings(entries: Entry[], reviews: Reviews, now = new Date(
 }
 
 export const reviewEntryToday = (entries: Entry[], now = new Date()) =>
-  entries.find(entry => entry.review && dayKey(new Date(entry.createdAt)) === dayKey(now));
+  entries.find(entry => entry.review && entryDay(entry) === dayKey(now));
 
 // Türkçe küçük harfte "I" → "ı" olur; İngilizce kelimeler de eşleşsin diye ı ile i aynı sayılır.
 const foldTerm = (term: string) => term.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR').replace(/ı/g, 'i');
@@ -67,7 +68,7 @@ export function learningError(term: string, meaning: string, entries: Entry[], n
   if (!meaning.trim()) return 'Anlamını ya da kısa bir açıklama yaz; tekrar ederken işine yarayacak.';
   const normalized = foldTerm(term);
   const today = dayKey(now);
-  if (entries.some(entry => entry.learning && foldTerm(entry.learning.term) === normalized && dayKey(new Date(entry.createdAt)) === today)) {
+  if (entries.some(entry => entry.learning && foldTerm(entry.learning.term) === normalized && entryDay(entry) === today)) {
     return 'Bunu bugün zaten ekledin.';
   }
   return null;
