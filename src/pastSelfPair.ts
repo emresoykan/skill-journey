@@ -1,3 +1,4 @@
+import { daysBetweenKeys, entryDay } from './dates';
 import type { Entry } from './storage';
 
 export type PastSelfPair = {
@@ -7,8 +8,6 @@ export type PastSelfPair = {
   daysApart: number;
 };
 
-const dayNumber = (date: Date) =>
-  Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
 
 export function findPastSelfPair(entries: Entry[]): PastSelfPair | null {
   const dated = entries
@@ -20,7 +19,7 @@ export function findPastSelfPair(entries: Entry[]): PastSelfPair | null {
     const later = dated[laterIndex];
     for (let earlierIndex = laterIndex + 1; earlierIndex < dated.length; earlierIndex++) {
       const earlier = dated[earlierIndex];
-      const daysApart = dayNumber(later.date) - dayNumber(earlier.date);
+      const daysApart = daysBetweenKeys(entryDay(earlier.entry), entryDay(later.entry));
       if (daysApart < 7) continue;
       const earlierSkills = new Set(earlier.entry.awards.map(award => award.skill));
       const shared = later.entry.awards.find(award => earlierSkills.has(award.skill));

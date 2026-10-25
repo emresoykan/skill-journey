@@ -1,3 +1,4 @@
+import { addDaysToKey, dayKey, daysBetweenKeys, entryDay, isValidDate, keyToDate } from './dates';
 import { displaySkill } from './skillEngine';
 import type { Entry } from './storage';
 
@@ -21,20 +22,19 @@ export const rankFor = (lvl: number) => [...ranks].reverse().find(rank => lvl >=
 export const nextRank = (lvl: number) => ranks.find(rank => rank.from > lvl);
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
-const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-const validDates = (entries: Entry[]) => entries.map(entry => new Date(entry.createdAt)).filter(date => Number.isFinite(date.getTime()));
-export const isToday = (iso: string, now = new Date()) => dayKey(new Date(iso)) === dayKey(now);
-export const todayEntries = (entries: Entry[], now = new Date()) => entries.filter(entry => isToday(entry.createdAt, now));
+// Kaydın günü yazıldığı saat dilimine göre sabittir (bkz. dates.ts); "bugün" cihazın yerel günüdür.
+const entryDays = (entries: Entry[]) => entries.filter(entry => isValidDate(entry.createdAt)).map(entryDay);
+export const isEntryToday = (entry: Entry, now = new Date()) => entryDay(entry) === dayKey(now);
+export const todayEntries = (entries: Entry[], now = new Date()) => entries.filter(entry => isEntryToday(entry, now));
 
 export type DayGroup = { key: string; date: Date; entries: Entry[]; xp: number };
 // Kayıtları takvim gününe göre gruplar; en yeni gün başta.
 export function groupByDay(entries: Entry[]): DayGroup[] {
   const groups = new Map<string, DayGroup>();
   for (const entry of entries) {
-    const date = new Date(entry.createdAt);
-    if (!Number.isFinite(date.getTime())) continue;
-    const key = dayKey(date);
-    const group = groups.get(key) ?? { key, date: startOfDay(date), entries: [], xp: 0 };
+    if (!isValidDate(entry.createdAt)) continue;
+    const key = entryDay(entry);
+    const group = groups.get(key) ?? { key, date: keyToDate(key), entries: [], xp: 0 };
     group.entries.push(entry);
     group.xp += entryXp(entry);
     groups.set(key, group);
@@ -53,29 +53,26 @@ export type StreakDay = { key: string; label: string; active: boolean; today: bo
 export type Streak = { count: number; activeToday: boolean; week: StreakDay[] };
 
 export function getStreak(entries: Entry[], now = new Date()): Streak {
-  const days = new Set(validDates(entries).map(dayKey));
-  const today = startOfDay(now);
-  const activeToday = days.has(dayKey(today));
+  const days = new Set(entryDays(entries));
+  const today = dayKey(now);
+  const activeToday = days.has(today);
   // Bugün henüz kayıt yoksa seri dünden geriye sayılır; gün bitene kadar kırılmış sayılmaz.
-  const cursor = new Date(today);
-  if (!activeToday) cursor.setDate(cursor.getDate() - 1);
+  let cursor = activeToday ? today : addDaysToKey(today, -1);
   let count = 0;
-  while (days.has(dayKey(cursor))) { count++; cursor.setDate(cursor.getDate() - 1); }
+  while (days.has(cursor)) { count++; cursor = addDaysToKey(cursor, -1); }
   const week = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(date.getDate() - 6 + index);
-    return { key: dayKey(date), label: new Intl.DateTimeFormat('tr-TR', { weekday: 'short' }).format(date), active: days.has(dayKey(date)), today: index === 6 };
+    const key = addDaysToKey(today, index - 6);
+    return { key, label: new Intl.DateTimeFormat('tr-TR', { weekday: 'short' }).format(keyToDate(key)), active: days.has(key), today: index === 6 };
   });
   return { count, activeToday, week };
 }
 
 export function longestStreak(entries: Entry[]): number {
-  const days = [...new Set(validDates(entries).map(date => startOfDay(date).getTime()))].sort((a, b) => a - b);
+  const days = [...new Set(entryDays(entries))].sort();
   let best = 0;
   let run = 0;
   days.forEach((day, index) => {
-    // Yaz saati geçişlerinde gün farkı 23/25 saat olabilir, bu yüzden yuvarlanır.
-    run = index > 0 && Math.round((day - days[index - 1]) / 86_400_000) === 1 ? run + 1 : 1;
+    run = index > 0 && daysBetweenKeys(days[index - 1], day) === 1 ? run + 1 : 1;
     best = Math.max(best, run);
   });
   return best;
@@ -100,7 +97,7 @@ export function dailyQuest(now = new Date()): Quest {
 }
 
 export const questDoneToday = (entries: Entry[], now = new Date()) =>
-  entries.some(entry => (entry.bonusXp ?? 0) > 0 && isToday(entry.createdAt, now));
+  entries.some(entry => (entry.bonusXp ?? 0) > 0 && isEntryToday(entry, now));
 
 type Stats = { entries: number; skills: number; level: number; streak: number; quests: number; combo: number; skillLevel: number; goalDays: number; habitChecks: number; habitStreak: number; learnings: number; recalls: number };
 export type Badge = { id: string; icon: string; title: string; description: string; stat: keyof Stats; goal: number };
@@ -151,14 +148,26 @@ function getStats(entries: Entry[]): Stats {
   };
 }
 
-export function badgeProgress(entries: Entry[]): BadgeProgress[] {
+// earned: kalıcı olarak kazanılmış rozetler (storage → loadBadges). Kazanılmış rozet, ilgili kayıtlar
+// silinse de açık kalır; ilerleme çubuğu yine kayıtlardan hesaplanır.
+export function badgeProgress(entries: Entry[], earned: Record<string, string> = {}): BadgeProgress[] {
   const stats = getStats(entries);
-  return badges.map(badge => ({ ...badge, current: Math.min(stats[badge.stat], badge.goal), unlocked: stats[badge.stat] >= badge.goal }));
+  return badges.map(badge => {
+    const unlocked = stats[badge.stat] >= badge.goal || badge.id in earned;
+    return { ...badge, current: unlocked ? badge.goal : Math.min(stats[badge.stat], badge.goal), unlocked };
+  });
 }
 
-export function newlyUnlocked(before: Entry[], after: Entry[]): Badge[] {
-  const had = new Set(badgeProgress(before).filter(badge => badge.unlocked).map(badge => badge.id));
-  return badgeProgress(after).filter(badge => badge.unlocked && !had.has(badge.id));
+// Bu kayıtla ilk kez açılan rozetler. Daha önce kazanılmış (earned) rozet yeniden kutlanmaz.
+export function newlyUnlocked(before: Entry[], after: Entry[], earned: Record<string, string> = {}): Badge[] {
+  const had = new Set(badgeProgress(before, earned).filter(badge => badge.unlocked).map(badge => badge.id));
+  return badgeProgress(after, earned).filter(badge => badge.unlocked && !had.has(badge.id));
+}
+
+// Kayıtlara göre açık olup henüz kalıcı listede olmayan rozetler; at ile işaretlenip listeye eklenir.
+export function withEarnedBadges(entries: Entry[], earned: Record<string, string>, at: string): Record<string, string> | null {
+  const missing = badgeProgress(entries).filter(badge => badge.unlocked && !(badge.id in earned));
+  return missing.length ? { ...earned, ...Object.fromEntries(missing.map(badge => [badge.id, at])) } : null;
 }
 
 // Tek bir rutinin serisi ve son 7 günü; genel seri hesabını o rutinin kayıtlarıyla çalıştırır.

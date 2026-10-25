@@ -1,3 +1,4 @@
+import { entryDay, isValidDate, keyToDate } from './dates';
 import { entryXp } from './game';
 import type { Entry } from './storage';
 
@@ -38,9 +39,8 @@ export function getChartPoints(entries: Entry[], period: Period, now = new Date(
   });
   const byKey = new Map(points.map(point => [point.key, point]));
   for (const entry of entries) {
-    const date = new Date(entry.createdAt);
-    if (!Number.isFinite(date.getTime())) continue;
-    const point = byKey.get(dayKey(periodStart(date, period)));
+    if (!isValidDate(entry.createdAt)) continue;
+    const point = byKey.get(dayKey(periodStart(keyToDate(entryDay(entry)), period)));
     if (point) point.xp += entryXp(entry);
   }
   return points;
