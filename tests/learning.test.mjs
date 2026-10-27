@@ -1,7 +1,7 @@
 // "Öğrendiklerim" kayıtlarının ve aralıklı tekrarın kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dayKey, dueLearnings, initialReview, isMastered, learningError, MASTERED_STAGE, nextReview, REVIEW_INTERVALS, reviewAnalysis, REVIEW_XP, reviewEntryToday, reviewStateOf } from '../src/learning.ts';
+import { dayKey, dueLearnings, initialReview, isMastered, learningError, MASTERED_STAGE, nextReview, REVIEW_INTERVALS, reviewAnalysis, REVIEW_XP, reviewEntryToday, reviewStateOf, splitLearning } from '../src/learning.ts';
 
 const day = (d, h = 12) => new Date(2026, 9, d, h, 0);
 const learned = (id, d, term = id) => ({ id, createdAt: day(d).toISOString(), description: term, skill: 'Learning', xp: 12, reason: '', awards: [], learning: { term, meaning: 'anlamı' } });
@@ -64,4 +64,24 @@ test('kavram ve anlam zorunlu, aynı gün aynı kavram tekrar eklenmez', () => {
 
 test('gün anahtarı iki haneli biçimlenir', () => {
   assert.equal(dayKey(new Date(2026, 0, 5)), '2026-01-05');
+});
+
+test('tek satırdan kavram ve anlam ayrılır', () => {
+  for (const [text, term, meaning] of [
+    ['Serendipity: şans eseri güzel bir keşif', 'Serendipity', 'şans eseri güzel bir keşif'],
+    ['  Serendipity :şans eseri  ', 'Serendipity', 'şans eseri'],
+    ['EBITDA = faiz, vergi ve amortisman öncesi kâr', 'EBITDA', 'faiz, vergi ve amortisman öncesi kâr'],
+    ['Opportunity cost — fırsat maliyeti', 'Opportunity cost', 'fırsat maliyeti'],
+    ['Ephemeral - geçici', 'Ephemeral', 'geçici'],
+    ['Serendipity anlamı şans eseri keşif', 'Serendipity', 'şans eseri keşif'],
+    ["Ephemeral'ın anlamı geçici", 'Ephemeral', 'geçici'],
+    ['Hedging demek riskten korunma', 'Hedging', 'riskten korunma'],
+    ['e-posta: elektronik posta', 'e-posta', 'elektronik posta'],
+  ]) assert.deepEqual(splitLearning(text), { term, meaning }, text);
+});
+
+test('ayraç yoksa anlam boş kalır', () => {
+  assert.deepEqual(splitLearning('Serendipity'), { term: 'Serendipity', meaning: '' });
+  assert.deepEqual(splitLearning(': sadece anlam'), { term: ': sadece anlam', meaning: '' });
+  assert.deepEqual(splitLearning(''), { term: '', meaning: '' });
 });

@@ -20,6 +20,19 @@ const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.
 
 export const learningDescription = ({ term, meaning }: Learning) => `${term} — ${meaning}`;
 
+// Tek satırdan kavram ve anlamı ayırır: "Serendipity: şans eseri güzel bir keşif". Ayraç ":", "=", tire
+// ya da sesle söylemeye uygun " anlamı " / " demek " olabilir; ilk geçen ayraç kullanılır.
+// "Ephemeral'ın anlamı geçici" gibi ifadede kavramdaki iyelik eki ('ın) atılır. Ayraç yoksa anlam boştur.
+const SEPARATORS = [/\s*[:=]\s*/u, /\s+[—–-]\s+/u, /\s+(?:anlamı|demek)\s+/iu];
+export function splitLearning(text: string): Learning {
+  const clean = text.trim().replace(/\s+/g, ' ');
+  const found = SEPARATORS.map(pattern => pattern.exec(clean)).filter((match): match is RegExpExecArray => !!match && match.index > 0)
+    .sort((a, b) => a.index - b.index)[0];
+  if (!found) return { term: clean, meaning: '' };
+  const term = clean.slice(0, found.index).replace(/['’](n?[ıiuü]n)$/u, '').trim();
+  return { term, meaning: clean.slice(found.index + found[0].length).trim() };
+}
+
 export function learningAnalysis(): Analysis {
   return { skill: 'Learning', xp: LEARN_XP, reason: 'Yeni bir şey öğrendin; tekrar ettikçe kalıcı olacak.', awards: [{ skill: 'Learning', xp: LEARN_XP }] };
 }
