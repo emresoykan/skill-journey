@@ -1,9 +1,9 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { dayLabel } from './game';
 import { useJourney } from './journey-state';
 import { MicButton } from './MicButton';
-import { isMastered, LEARN_XP, REVIEW_INTERVALS, REVIEW_XP, reviewEntryToday, reviewStateOf, stageIcon } from './learning';
+import { isMastered, LEARN_XP, REVIEW_INTERVALS, REVIEW_XP, reviewEntryToday, reviewStateOf, splitLearning, stageIcon } from './learning';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
@@ -16,16 +16,17 @@ const formatDue = (due: string) => {
 // Bugün sekmesi: öğrenilen kavram/kelime ve anlamı.
 export function LearnCard({ children }: { children?: ReactNode }) {
   const { busy, loading, learnError, setLearnError, addLearning } = useJourney();
-  const [term, setTerm] = useState('');
-  const [meaning, setMeaning] = useState('');
-  const meaningInput = useRef<TextInput>(null);
+  const [text, setText] = useState('');
   if (loading) return null;
-  const ready = !!term.trim() && !!meaning.trim();
+  const parsed = splitLearning(text);
+  const change = (value: string) => { setText(value); setLearnError(''); };
 
   async function submit() {
-    if (!(await addLearning(term, meaning))) return;
-    setTerm('');
-    setMeaning('');
+    if (!parsed.meaning) {
+      setLearnError('Anlamını da yaz: kavramla arasına “:” koy (sesle “anlamı” de). Örn. Serendipity: şans eseri güzel bir keşif');
+      return;
+    }
+    if (await addLearning(parsed.term, parsed.meaning)) setText('');
   }
 
   return <View style={s.card}>
@@ -33,32 +34,21 @@ export function LearnCard({ children }: { children?: ReactNode }) {
       <Text style={s.title}>📚 Bugün öğrendiğim</Text>
       <Text style={s.xpChip}>+{LEARN_XP} XP</Text>
     </View>
-    <Text style={s.sub}>Bir kavram, konu ya da kelime ve anlamı. Unutmaman için ara ara sana soracağız.</Text>
+    <Text style={s.sub}>Kavram ya da kelime ve anlamı, arasına “:” koyarak. Unutmaman için ara ara sana soracağız.</Text>
     <View style={s.fieldRow}><TextInput
-      accessibilityLabel="Kavram ya da kelime"
-      placeholder="Kavram ya da kelime, örn. Serendipity"
+      accessibilityLabel="Kavram ve anlamı"
+      placeholder="örn. Serendipity: şans eseri keşif"
       placeholderTextColor="#9AA6A8"
-      maxLength={80}
-      returnKeyType="next"
-      submitBehavior="submit"
-      onSubmitEditing={() => meaningInput.current?.focus()}
-      value={term}
-      onChangeText={value => { setTerm(value); setLearnError(''); }}
-      style={s.input}
-    /><MicButton value={term} onChangeText={value => { setTerm(value); setLearnError(''); }} size={48} /></View>
-    <View style={s.fieldRow}><TextInput
-      ref={meaningInput}
-      accessibilityLabel="Anlamı"
-      placeholder="Anlamı, örn. Şans eseri güzel bir keşif"
-      placeholderTextColor="#9AA6A8"
-      maxLength={240}
+      maxLength={320}
       returnKeyType="done"
+      submitBehavior="submit"
       onSubmitEditing={submit}
-      value={meaning}
-      onChangeText={value => { setMeaning(value); setLearnError(''); }}
+      value={text}
+      onChangeText={change}
       style={s.input}
-    /><MicButton value={meaning} onChangeText={value => { setMeaning(value); setLearnError(''); }} size={48} /></View>
-    <Pressable accessibilityRole="button" disabled={busy || !ready} onPress={submit} style={[s.primary, (busy || !ready) && { opacity: 0.45 }]}>
+    /><MicButton value={text} onChangeText={change} size={48} /></View>
+    {parsed.meaning ? <Text style={s.preview} numberOfLines={2}>{`Kavram: ${parsed.term}  ·  Anlamı: ${parsed.meaning}`}</Text> : null}
+    <Pressable accessibilityRole="button" disabled={busy || !text.trim()} onPress={submit} style={[s.primary, (busy || !text.trim()) && { opacity: 0.45 }]}>
       <Text style={s.primaryText}>Öğrendiklerime ekle</Text>
     </Pressable>
     {learnError ? <Text style={s.error}>{learnError}</Text> : null}
@@ -156,6 +146,7 @@ const s = StyleSheet.create({
   countChip: { color: '#4B3FA0', backgroundColor: '#E6E0FF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12, fontWeight: '800', overflow: 'hidden' },
   countDone: { color: teal, backgroundColor: '#DDF1E9' },
   sub: { color: '#657482', fontSize: 13, lineHeight: 19, marginTop: 8 },
+  preview: { color: teal, fontSize: 12, fontWeight: '700', lineHeight: 17, marginTop: -2, marginBottom: 8 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   input: { flex: 1, minWidth: 0, height: 48, borderColor: '#D5DFDA', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, color: '#182637', fontSize: 15, backgroundColor: '#FAFBF9' },
   primary: { height: 48, borderRadius: 12, backgroundColor: teal, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
