@@ -215,3 +215,26 @@ Kararlar (kullanıcı, 2026-10-24): yerel kurallar (LLM yok), eski XP korunur, �
 - Kaydetmeden önce öneri onayı (şu an önce kaydediliyor, sonra düzeltiliyor).
 - Ayrı bir XP olay defteri yok. XP kayıtlardan türetiliyor; silme ve düzenleme tutarlı.
 - Karantinadaki veriyi uygulama içinden kurtarma ekranı yok. Veri yedek dosyasında ham olarak duruyor.
+
+## 11. Faz 3 (ekran düzeni) — yapılanlar
+
+- **Bugün:**
+  - Yeni sıra: kompakt profil kartı → "Bugün ne yaptın" → Rutinler → tekrarlar → Bugün öğrendiğim → günün görevi.
+  - Kompakt kartta yalnız seviye, seri ve XP çubuğu var; seri tehlikedeyse tek satır uyarı çıkar.
+  - Hızlı başlangıç şablonları: İlk kez / Öğrendim / Bitirdim / Öğrettim. Fiilleri beceri motorunun derinlik algısıyla uyumlu.
+  - Yazılmamış metin cihazda saklanır (`skill-journey:draft:v1`, yedeğe girmez), uygulama kapansa da geri gelir.
+- **Gelişim:** Dört sekme.
+  - **Genel:** Profil kartı, sayılar (kayıt, beceri, son 30 günde aktif gün, en uzun seri), son 30 günde en çok gelişen beceriler, son 30 günde ilk kez görülen beceriler (dayanak kaydıyla), 4 haftalık öğrenme düzeni, yedekleme.
+  - **Beceriler:** Mevcut beceri listesi ve kanıtlar.
+  - **Başarılar:** Rozetler.
+  - **Analiz:** Grafik, son 7 gün, rutin serileri.
+  - Hesaplar `src/insights.ts` içinde, yalnız kayıtlardan; testler `tests/insights.test.mjs`.
+- **Anılar:**
+  - Metin aramasına ek olarak tarih (7 gün / 30 gün / 3 ay / 1 yıl), alan ve beceri filtreleri. Beceri filtresi alt becerileri de kapsar; seçenekler yalnız kayıtlarda geçenlerden oluşur.
+  - Bir becerinin ilk görüldüğü kayıtta "✦ İlk kez: …" işareti var.
+- **React #418 kapandı.** Statik HTML derleme anındaki tarih ve boş veriyle üretiliyor, tarayıcıdaki ilk çizimle uyuşmuyordu. Ekran artık tarayıcıda, ilk çizimden sonra çiziliyor (`src/useHydrated.ts`). Bugün, Gelişim ve Anılar'da uyarı yok.
+
+**Faz 3'te kalanlar / sınırlamalar:**
+
+- "Geçmişteki ben" kartı aynı kaldı: aynı beceride en az bir hafta arayla iki gerçek kayıt. Derinlik karşılaştırması (öğrendi → uyguladı) yeni motorla oluşan kayıtlar biriktikçe eklenebilir.
+- Karanlık mod ve ortak tasarım bileşenleri (Faz 6, tasarım sistemi) bu fazda yapılmadı.
