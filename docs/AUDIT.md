@@ -257,3 +257,26 @@ Kararlar (kullanıcı, 2026-10-24): yerel kurallar (LLM yok), eski XP korunur, �
 
 - Kilometre taşları şimdilik seviye ilerlemesiyle sınırlı ("Seviye 3'e 40 XP"). Beceriye özel rozetler (ör. "ilk uygulama", "ilk öğretme") derinlik verisi biriktikçe eklenebilir.
 - Ağaç düzeni sabit (dikey). Yatay, serbest yerleşimli bir harita için SVG ve hareket kütüphanesi gerekir. Mevcut ihtiyaç için gerekli görülmedi.
+
+## 13. Faz 5 (haftalık değerlendirme, tekrar sistemi) — yapılanlar
+
+- **Haftalık değerlendirme** (`src/weeklyReview.ts` saf ve testli, `src/WeeklyReviewCard.tsx`). Gelişim › Genel'de, profil kartının altında.
+  - Son 7 gün (bugün dahil) önceki 7 günle karşılaştırılır: kayıt sayısı, aktif gün, XP ve tür dağılımı (an / rutin / kavram / tekrar).
+  - Bölümler: en çok çalışılan beceriler, ilk kez görülen beceriler (kaydın metniyle), öğrenme (yeni kavram, tekrarda hatırlama), derinlik dağılımı, kilometre taşları, ara verilen alanlar, sıradaki adımlar.
+  - **Kilometre taşları:** bu hafta ulaşılan genel seviye, beceri seviyeleri (2 ve üstü) ve bu hafta kazanılan rozetler. Tarihi bilinmeyen eski rozetler sayılmaz.
+  - **Ara verilen alan:** önceki 4 haftada en az 2 kaydı olup bu hafta hiç kaydı olmayan alan.
+  - **Öneriler:** en fazla 3 öneri; her biri "Neden:" satırıyla hangi sayıdan çıktığını söyler. Kurallar: hiç kayıt yok; tekrarı gelmiş kavram var; ara verilen alan var; derinliği belli ≥3 kaydın hiçbiri "ürettin/öğrettin/ustalık" değil; aktif gün 4'ten az ve geçen haftadan düşük. Veri yoksa öneri uydurulmaz.
+  - Yapay zekâ kullanılmaz; kartta bu not yazar.
+- **Tekrar sistemi:**
+  - Kavrama isteğe bağlı açıklama, örnek ve kategori eklenebilir ("+ Açıklama, örnek, kategori"). Daha önce kullanılan kategoriler çip olarak önerilir; seçilen kategori sonraki kavram için kalır.
+  - Tekrarda cevap kutusu anlamı, açıklamayı ve örneği gösterir. Her kavram için hatırlanma/unutulma sayısı tutulur (`✓ n · ✗ m`).
+  - Öğrendiklerim defterinde kategori filtresi, "Önümüzdeki 7 günde N tekrar" ve tüm alanlarda arama var.
+  - **Kopya kart engeli:** aynı kavram defterde varsa ve henüz ustalaşılmadıysa yeniden eklenmez; ne zaman eklendiği söylenir. Ustalaşılmış kavram bilinçli olarak yeniden eklenebilir.
+- `toNumber` (Türkçe yönelme eki): "Seviye 2'ye", "Seviye 3'e", "Seviye 10'a". Ağaçtaki "Seviye 2'e" hatası düzeldi.
+- Eski kayıtlar ve tekrar durumları değiştirilmedi; yeni alanlar isteğe bağlı (`docs/DATA_SCHEMA.md`).
+
+**Sınırlamalar:**
+
+- Kilometre taşları haftalık kartta listelenir; seviye atlama kutlaması dışında anlık yeni bir kutlama ekranı eklenmedi.
+- Tekrar aralıkları sabit (`REVIEW_INTERVALS`); hatırlama oranına göre aralık uyarlanmıyor. Sayılar biriktikçe değerlendirilebilir.
+- Haftalık değerlendirme "son 7 gün" penceresidir, takvim haftası (Pzt–Paz) değildir.
