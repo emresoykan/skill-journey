@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useReducedMotion } from './useReducedMotion';
 
 const colors = ['#F5C45A', '#166B65', '#E86A5B', '#6C8CF5', '#9BD3AE', '#F29BC1'];
 const useNative = Platform.OS !== 'web';
@@ -29,7 +30,8 @@ function Piece({ seed, burstKey, width, height }: { seed: Seed; burstKey: string
 
 export function Confetti({ burstKey, count = 32 }: { burstKey: string | null; count?: number }) {
   const { width, height } = useWindowDimensions();
-  if (!burstKey) return null;
+  const reduced = useReducedMotion();
+  if (!burstKey || reduced) return null;
   const base = hash(burstKey);
   const seeds: Seed[] = Array.from({ length: count }, (_, i) => {
     const r = (k: number) => noise(base + i * 17 + k);

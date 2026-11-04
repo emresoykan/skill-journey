@@ -238,3 +238,22 @@ Kararlar (kullanıcı, 2026-10-24): yerel kurallar (LLM yok), eski XP korunur, �
 
 - "Geçmişteki ben" kartı aynı kaldı: aynı beceride en az bir hafta arayla iki gerçek kayıt. Derinlik karşılaştırması (öğrendi → uyguladı) yeni motorla oluşan kayıtlar biriktikçe eklenebilir.
 - Karanlık mod ve ortak tasarım bileşenleri (Faz 6, tasarım sistemi) bu fazda yapılmadı.
+
+## 12. Faz 4 (görsel beceri ağacı) — yapılanlar
+
+- `src/skillTree.ts` (saf, testli): katalogdan alan → beceri → alt beceri ağacı.
+  - Her düğümde kendi XP'si, toplam XP (alt becerileri dahil), farklı kayıt sayısı, seviye, sonraki seviyeye ilerleme ve keşif durumu var.
+  - Katalogda olmayan beceriler "Kendi becerilerin" alanında.
+  - `nodeEvidence` bir dalın kanıt kayıtlarını, en yeni önce ve o daldan gelen XP ile verir.
+- `src/SkillTree.tsx`: Gelişim › Beceriler'de **Ağaç / Liste** seçimi.
+  - Ağaçta alan sekmeleri "keşfedilen/toplam" sayısını gösterir.
+  - Düğümler sol çizgilerle üst beceriye bağlıdır. Keşfedilmemiş beceriler soluk, kesik çerçeveli ve 🔒 işaretli.
+  - Düğüme dokununca o dalın kayıtları açılır (ilk 5, "tümünü göster"). Kilitli düğümde nasıl açılacağı yazar.
+  - Liste görünümü eski beceri listesidir; erişilebilir sade görünüm ve kaydın becerisini düzeltme yeri.
+- Yakınlaştırma/kaydırma eklenmedi. Dikey ağaç 320 px genişliğe sığıyor (taşma 0); en büyük alan 13 beceri. Ek bağımlılık (SVG, jest kütüphanesi) gerekmedi.
+- **Hareketi azalt** (`src/useReducedMotion.ts`): iOS/Android ayarı ya da `prefers-reduced-motion` açıksa konfeti gösterilmez. XP sayacı, ödül kartı, seviye kutlaması, profil çubuğu ve ağaçtaki kanıt paneli animasyonsuz hemen son haline gelir.
+
+**Sınırlamalar:**
+
+- Kilometre taşları şimdilik seviye ilerlemesiyle sınırlı ("Seviye 3'e 40 XP"). Beceriye özel rozetler (ör. "ilk uygulama", "ilk öğretme") derinlik verisi biriktikçe eklenebilir.
+- Ağaç düzeni sabit (dikey). Yatay, serbest yerleşimli bir harita için SVG ve hareket kütüphanesi gerekir. Mevcut ihtiyaç için gerekli görülmedi.

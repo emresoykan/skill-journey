@@ -21,6 +21,7 @@ import { Confetti } from './Confetti';
 import { setSoundEnabled, useSoundEnabled } from './sounds';
 import { useHydrated } from './useHydrated';
 import { GrowthOverview } from './GrowthOverview';
+import { SkillTree } from './SkillTree';
 import { MemoryFilters } from './MemoryFilters';
 import { discoveriesByEntry, filterEntries, filterOptions, type DateRange } from './insights';
 
@@ -41,6 +42,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
   const [domain, setDomain] = useState<string | null>(null);
   const [skillFilter, setSkillFilter] = useState<string | null>(null);
   const [growthTab, setGrowthTab] = useState<GrowthTab>('overview');
+  const [skillView, setSkillView] = useState<'tree' | 'list'>('tree');
   const filtering = !!query.trim() || range !== 'all' || !!domain || !!skillFilter;
   const visibleEntries = section === 'memories' ? filterEntries(entries, { query, range, domain, skill: skillFilter }) : entries;
   const options = section === 'memories' ? filterOptions(entries) : { skills: [], domains: [] };
@@ -68,8 +70,17 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
           <GrowthOverview entries={entries} />
           <BackupCard />
         </> : growthTab === 'skills' ? <>
-          <View style={s.row}><Text style={s.section}>Becerilerin</Text><Text style={s.muted}>{skillTotals.length} beceri · {entries.length} kayıt</Text></View>
-          <SkillEvidence entries={entries} busy={busy} onCorrectAward={correctAward} />
+          <View style={s.row}>
+            <View style={{ flexShrink: 1 }}><Text style={[s.section, { marginBottom: 2 }]}>Becerilerin</Text><Text style={s.muted}>{skillTotals.length} beceri · {entries.length} kayıt</Text></View>
+            <View style={s.viewToggle} accessibilityRole="radiogroup">
+              {([['tree', '🌳 Ağaç'], ['list', '☰ Liste']] as const).map(([key, label]) => <Pressable key={key} accessibilityRole="radio" accessibilityState={{ selected: skillView === key }} aria-checked={skillView === key} onPress={() => setSkillView(key)} style={[s.viewOption, skillView === key && s.viewOptionOn]}>
+                <Text style={[s.viewText, skillView === key && s.viewTextOn]}>{label}</Text>
+              </Pressable>)}
+            </View>
+          </View>
+          <View style={{ height: 12 }} />
+          {/* Liste görünümü: erişilebilir sade liste; kaydın becerisini düzeltmek de buradan yapılır. */}
+          {skillView === 'tree' ? <SkillTree entries={entries} /> : <SkillEvidence entries={entries} busy={busy} onCorrectAward={correctAward} />}
         </> : growthTab === 'badges' ? <Badges entries={entries} earned={earnedBadges} /> : <>
           <ProgressChart entries={entries} />
           <WeeklyTotals />
@@ -164,6 +175,11 @@ const s = StyleSheet.create({
   tabOn: { backgroundColor: 'white', shadowColor: '#182637', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
   tabText: { color: '#657482', fontSize: 13, fontWeight: '800' },
   tabTextOn: { color: teal },
+  viewToggle: { flexDirection: 'row', backgroundColor: '#EEF2EE', borderRadius: 12, padding: 3, gap: 3 },
+  viewOption: { borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6 },
+  viewOptionOn: { backgroundColor: 'white' },
+  viewText: { color: '#657482', fontSize: 12, fontWeight: '800' },
+  viewTextOn: { color: teal },
   milestone: { alignSelf: 'flex-start', color: '#664708', backgroundColor: '#FCEBB5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800', marginTop: 8, overflow: 'hidden' },
   analyzing: { color: '#8B5B00', backgroundColor: '#FFF7DF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginTop: 12, fontSize: 13, fontWeight: '700', overflow: 'hidden' },
 });
