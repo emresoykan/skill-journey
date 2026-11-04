@@ -1,7 +1,7 @@
 // "Öğrendiklerim" kayıtlarının ve aralıklı tekrarın kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dayKey, dueLearnings, initialReview, isMastered, learningError, MASTERED_STAGE, nextReview, REVIEW_INTERVALS, reviewAnalysis, REVIEW_XP, reviewEntryToday, reviewStateOf, splitLearning } from '../src/learning.ts';
+import { dayKey, dueLearnings, initialReview, isMastered, learningError, MASTERED_STAGE, nextReview, REVIEW_INTERVALS, reviewAnalysis, REVIEW_XP, reviewEntryToday, reviewStateOf, splitLearning, cleanLearning, learningCategories, upcomingReviews } from '../src/learning.ts';
 
 const day = (d, h = 12) => new Date(2026, 9, d, h, 0);
 const learned = (id, d, term = id) => ({ id, createdAt: day(d).toISOString(), description: term, skill: 'Learning', xp: 12, reason: '', awards: [], learning: { term, meaning: 'anlamı' } });
@@ -26,7 +26,7 @@ test('son aralığı da geçen kavram ustalaşılmış olur', () => {
 });
 
 test('unutulan kavram başa döner ve ertesi gün tekrar sorulur', () => {
-  assert.deepEqual(nextReview({ stage: 3, due: '2026-10-22' }, false, day(22)), { stage: 0, due: '2026-10-23' });
+  assert.deepEqual(nextReview({ stage: 3, due: '2026-10-22' }, false, day(22)), { stage: 0, due: '2026-10-23', correct: 0, wrong: 1 });
 });
 
 test('tekrarı gelenler en eski tarihliden başlayarak listelenir', () => {
@@ -55,11 +55,14 @@ test('günün tekrar kaydı yalnız bugünden bulunur', () => {
   assert.equal(reviewEntryToday(entries.slice(0, 1), day(22)), undefined);
 });
 
-test('kavram ve anlam zorunlu, aynı gün aynı kavram tekrar eklenmez', () => {
+test('kavram ve anlam zorunlu; aynı kavram defterde tekrar ediliyorsa yeniden eklenmez', () => {
   assert.match(learningError(' ', 'x', [], day(22)), /kavramı/);
   assert.match(learningError('x', ' ', [], day(22)), /Anlamını/);
   assert.equal(learningError('SERENDIPITY', 'x', [learned('a', 22, 'serendipity')], day(22)), 'Bunu bugün zaten ekledin.');
-  assert.equal(learningError('serendipity', 'x', [learned('a', 21, 'serendipity')], day(22)), null);
+  assert.match(learningError('serendipity', 'x', [learned('a', 21, 'serendipity')], day(22)), /zaten defterinde \(21 Ekim\)/);
+  // Ustalaşılmış kavram yeniden öğrenilebilir.
+  assert.equal(learningError('serendipity', 'x', [learned('a', 21, 'serendipity')], day(22), { a: { stage: MASTERED_STAGE, due: '' } }), null);
+  assert.equal(learningError('ephemeral', 'x', [learned('a', 21, 'serendipity')], day(22)), null);
 });
 
 test('gün anahtarı iki haneli biçimlenir', () => {
@@ -84,4 +87,27 @@ test('ayraç yoksa anlam boş kalır', () => {
   assert.deepEqual(splitLearning('Serendipity'), { term: 'Serendipity', meaning: '' });
   assert.deepEqual(splitLearning(': sadece anlam'), { term: ': sadece anlam', meaning: '' });
   assert.deepEqual(splitLearning(''), { term: '', meaning: '' });
+});
+
+test('tekrar sonuçları sayılır', () => {
+  let state = { stage: 0, due: '2026-10-22' };
+  state = nextReview(state, true, day(22));
+  state = nextReview(state, false, day(23));
+  state = nextReview(state, true, day(24));
+  assert.deepEqual([state.correct, state.wrong, state.stage], [2, 1, 1]);
+});
+
+test('ayrıntılar temizlenir, boş alanlar saklanmaz', () => {
+  assert.deepEqual(cleanLearning({ term: ' Hedge ', meaning: ' riskten  korunma ', explanation: '  ', example: ' Döviz forward ile ', category: ' Finans ' }),
+    { term: 'Hedge', meaning: 'riskten korunma', example: 'Döviz forward ile', category: 'Finans' });
+  assert.equal(cleanLearning({ term: 'x', meaning: 'y', category: 'k'.repeat(50) }).category.length, 30);
+});
+
+test('kategoriler en çok kullanılandan; yaklaşan tekrarlar sayılır', () => {
+  const withCat = (id, d, category) => ({ ...learned(id, d), learning: { term: id, meaning: 'm', category } });
+  const entries = [withCat('a', 21, 'İngilizce'), withCat('b', 21, 'Finans'), withCat('c', 20, 'İngilizce'), learned('d', 15)];
+  assert.deepEqual(learningCategories(entries), ['İngilizce', 'Finans']);
+  // 21'de öğrenilenlerin ilk tekrarı 22 (bugün, sayılmaz); 'd' 16'da gelmişti (geçmiş, sayılmaz).
+  assert.equal(upcomingReviews(entries, {}, day(22)), 0);
+  assert.equal(upcomingReviews(entries, { a: { stage: 1, due: '2026-10-25' }, b: { stage: 2, due: '2026-11-10' } }, day(22)), 1);
 });

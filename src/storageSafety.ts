@@ -46,7 +46,10 @@ export function parseEntries(value: unknown): { entries: Entry[]; rejected: unkn
     ) && entry.awards.length > 0
       ? entry.awards
       : [{ skill: entry.skill, xp: entry.xp }];
-    const learning = typeof entry.learning?.term === 'string' && typeof entry.learning?.meaning === 'string' ? { term: entry.learning.term, meaning: entry.learning.meaning } : undefined;
+    const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : undefined;
+    const learning = typeof entry.learning?.term === 'string' && typeof entry.learning?.meaning === 'string'
+      ? Object.fromEntries(Object.entries({ term: entry.learning.term, meaning: entry.learning.meaning, explanation: text(entry.learning.explanation), example: text(entry.learning.example), category: text(entry.learning.category) }).filter(([, value]) => value !== undefined)) as Entry['learning']
+      : undefined;
     const review = Number.isInteger(entry.review?.count) && entry.review!.count > 0 ? { count: entry.review!.count } : undefined;
     return { ...entry, ...engineDetails(entry), awards, bonusXp: typeof entry.bonusXp === 'number' && entry.bonusXp > 0 ? entry.bonusXp : undefined, habitId: typeof entry.habitId === 'string' ? entry.habitId : undefined, measures: validMeasures(entry.measures), learning, review };
   });
