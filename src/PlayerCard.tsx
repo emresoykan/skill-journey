@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { LEVEL_XP, level, nextRank, rankFor, type Streak } from './game';
+import { useReducedMotion } from './useReducedMotion';
 
 const gold = '#F5C45A';
 
@@ -10,10 +11,12 @@ export function PlayerCard({ totalXp, streak, compact = false }: { totalXp: numb
   const rank = rankFor(lvl);
   const upcoming = nextRank(lvl);
   const progress = totalXp % LEVEL_XP;
+  const reduced = useReducedMotion();
   const [fill] = useState(() => new Animated.Value(0));
   useEffect(() => {
+    if (reduced) { fill.setValue(progress); return; }
     Animated.timing(fill, { toValue: progress, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [fill, progress]);
+  }, [fill, progress, reduced]);
   const width = fill.interpolate({ inputRange: [0, LEVEL_XP], outputRange: ['0%', '100%'] });
   const atRisk = !streak.activeToday && streak.count > 0;
 

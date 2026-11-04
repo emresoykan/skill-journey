@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useReducedMotion } from './useReducedMotion';
 import { Confetti } from './Confetti';
 import { nextRank, rankFor } from './game';
 import { useJourney } from './journey-state';
@@ -11,19 +12,21 @@ const gold = '#F5C45A';
 // Sekme düzeyinde bir kez çizilir; her ekranda ayrı modal açılmasın diye.
 export function LevelUpModal() {
   const { levelUpShown, dismissLevelUp } = useJourney();
+  const reduced = useReducedMotion();
   const [pop] = useState(() => new Animated.Value(0));
   useEffect(() => {
     if (levelUpShown === null) return;
+    if (reduced) { pop.setValue(1); return; }
     pop.setValue(0);
     Animated.spring(pop, { toValue: 1, friction: 4, tension: 60, useNativeDriver: useNative }).start();
-  }, [levelUpShown, pop]);
+  }, [levelUpShown, pop, reduced]);
   if (levelUpShown === null) return null;
   const rank = rankFor(levelUpShown);
   const newRank = rankFor(levelUpShown - 1).title !== rank.title;
   const upcoming = nextRank(levelUpShown);
   const close = () => { tap(); dismissLevelUp(); };
 
-  return <Modal transparent visible animationType="fade" onRequestClose={dismissLevelUp}>
+  return <Modal transparent visible animationType={reduced ? 'none' : 'fade'} onRequestClose={dismissLevelUp}>
     <View style={s.backdrop}>
       {/* Kartın dışına dokunmak da pencereyi kapatır. */}
       <Pressable accessibilityLabel="Kapat" onPress={close} style={StyleSheet.absoluteFill} />

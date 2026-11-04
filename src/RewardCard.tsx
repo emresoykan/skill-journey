@@ -3,6 +3,7 @@ import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-nat
 import { entryXp } from './game';
 import { displaySkill } from './skillEngine';
 import { SkillExplain } from './SkillExplain';
+import { useReducedMotion } from './useReducedMotion';
 import { useJourney, type Reward } from './journey-state';
 
 const useNative = Platform.OS !== 'web';
@@ -11,8 +12,11 @@ const teal = '#166B65';
 // Süreye göre sayar: kare atlanırsa bir sonraki kare doğru değere zıplar. Sayaç her
 // durumda hedefte biter; animasyon yarıda kesilse bile ekranda yanlış sayı kalmaz.
 function useCountUp(target: number, duration = 700, delay = 150) {
+  const reduced = useReducedMotion();
   const [value, setValue] = useState(0);
   useEffect(() => {
+    // Hareket azaltıldıysa sayaç çalışmaz; değer aşağıda doğrudan hedef olarak döner.
+    if (reduced) return;
     let frame = 0;
     const start = Date.now() + delay;
     const step = () => {
@@ -23,15 +27,17 @@ function useCountUp(target: number, duration = 700, delay = 150) {
     frame = requestAnimationFrame(step);
     const settle = setTimeout(() => setValue(target), delay + duration + 50);
     return () => { cancelAnimationFrame(frame); clearTimeout(settle); };
-  }, [target, duration, delay]);
-  return value;
+  }, [target, duration, delay, reduced]);
+  return reduced ? target : value;
 }
 
 function PopIn({ index, children }: { index: number; children: ReactNode }) {
+  const reduced = useReducedMotion();
   const [t] = useState(() => new Animated.Value(0));
   useEffect(() => {
+    if (reduced) { t.setValue(1); return; }
     Animated.spring(t, { toValue: 1, delay: 300 + index * 160, friction: 6, tension: 80, useNativeDriver: useNative }).start();
-  }, [index, t]);
+  }, [index, t, reduced]);
   return <Animated.View style={{ opacity: t, transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }, { scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }}>{children}</Animated.View>;
 }
 
@@ -65,10 +71,12 @@ export function RewardCard({ reward }: { reward: Reward }) {
     </Pressable>
     {explaining ? <SkillExplain entry={entry} /> : null}
   </> : null;
+  const reduced = useReducedMotion();
   const [enter] = useState(() => new Animated.Value(0));
   useEffect(() => {
+    if (reduced) { enter.setValue(1); return; }
     Animated.spring(enter, { toValue: 1, friction: 5, tension: 70, useNativeDriver: useNative }).start();
-  }, [enter]);
+  }, [enter, reduced]);
   const perks = rewardPerks(reward);
   const pop = { opacity: enter, transform: [{ scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] };
 
