@@ -4,7 +4,8 @@ import { LEVEL_XP, level, nextRank, rankFor, type Streak } from './game';
 
 const gold = '#F5C45A';
 
-export function PlayerCard({ totalXp, streak }: { totalXp: number; streak: Streak }) {
+// compact: Bugün sekmesinde yalnız seviye, seri ve XP çubuğu (hafta ve ipucu satırı Gelişim'de).
+export function PlayerCard({ totalXp, streak, compact = false }: { totalXp: number; streak: Streak; compact?: boolean }) {
   const lvl = level(totalXp);
   const rank = rankFor(lvl);
   const upcoming = nextRank(lvl);
@@ -16,12 +17,12 @@ export function PlayerCard({ totalXp, streak }: { totalXp: number; streak: Strea
   const width = fill.interpolate({ inputRange: [0, LEVEL_XP], outputRange: ['0%', '100%'] });
   const atRisk = !streak.activeToday && streak.count > 0;
 
-  return <View style={s.card}>
-    <View style={s.top}>
-      <View style={s.avatar}><Text style={s.avatarIcon}>{rank.icon}</Text></View>
+  return <View style={[s.card, compact && s.cardCompact]}>
+    <View style={[s.top, compact && s.topCompact]}>
+      <View style={[s.avatar, compact && s.avatarCompact]}><Text style={[s.avatarIcon, compact && { fontSize: 20 }]}>{rank.icon}</Text></View>
       <View style={{ flex: 1 }}>
         <Text style={s.rank}>{rank.title.toLocaleUpperCase('tr-TR')}</Text>
-        <Text style={s.level}>Seviye {lvl}</Text>
+        <Text style={[s.level, compact && s.levelCompact]}>Seviye {lvl}</Text>
       </View>
       <View style={[s.streak, streak.count === 0 && s.streakOff]} accessibilityLabel={`${streak.count} günlük seri`}>
         <Text style={s.streakIcon}>🔥</Text>
@@ -30,6 +31,7 @@ export function PlayerCard({ totalXp, streak }: { totalXp: number; streak: Strea
     </View>
     <View style={s.row}><Text style={s.xpLabel}>XP</Text><Text style={s.xpLabel}>{progress} / {LEVEL_XP}</Text></View>
     <View style={s.track}><Animated.View style={[s.fill, { width }]} /></View>
+    {compact ? (atRisk ? <Text style={[s.hint, { color: gold, marginTop: 10 }]}>{`Serini korumak için bugün bir an yaz! 🔥 ${streak.count}`}</Text> : null) : <>
     <View style={s.week}>
       {streak.week.map(day => <View key={day.key} style={s.day}>
         <View style={[s.dayDot, day.active && s.dayDotOn, day.today && !day.active && s.dayDotToday]}>
@@ -44,11 +46,16 @@ export function PlayerCard({ totalXp, streak }: { totalXp: number; streak: Strea
         : 'İlk anını yaz, serini başlat.'}
       {upcoming ? `  ·  Seviye ${upcoming.from}: ${upcoming.icon} ${upcoming.title}` : ''}
     </Text>
+    </>}
   </View>;
 }
 
 const s = StyleSheet.create({
   card: { backgroundColor: '#182637', borderRadius: 26, padding: 20, marginBottom: 18 },
+  cardCompact: { borderRadius: 22, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 14 },
+  topCompact: { marginBottom: 10, gap: 12 },
+  avatarCompact: { width: 40, height: 40, borderRadius: 13 },
+  levelCompact: { fontSize: 20 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 },
   avatar: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#24384D', borderWidth: 2, borderColor: gold, alignItems: 'center', justifyContent: 'center' },
   avatarIcon: { fontSize: 28 },

@@ -165,3 +165,9 @@ export async function runMigrations(): Promise<number[]> {
   }
   return done;
 }
+
+// "Bugün ne yaptın" kutusundaki yazılmamış metin: uygulama kapanınca kaybolmasın diye cihazda tutulur.
+// Cihaza özgü bir kolaylıktır, yedeğe girmez.
+const DRAFT_KEY = 'skill-journey:draft:v1';
+export const loadDraft = () => AsyncStorage.getItem(DRAFT_KEY);
+export const saveDraft = (text: string) => text.trim() ? AsyncStorage.setItem(DRAFT_KEY, text) : AsyncStorage.removeItem(DRAFT_KEY);

@@ -44,7 +44,8 @@ test('dosya adı tarihi taşır', () => {
 
 // Kaynakta yeni bir saklama anahtarı eklenip yedeğe konmazsa bu test uyarır.
 // snapshot: göç öncesi kopya; verinin ikinci kopyası olduğu için yedeğe girmez.
-const NOT_BACKED_UP = new Set(['skill-journey:push-id', 'skill-journey:push-synced', 'skill-journey:last-backup', 'skill-journey:snapshot:v1']);
+// draft: yazılmamış metin, cihaza özgü kolaylık.
+const NOT_BACKED_UP = new Set(['skill-journey:push-id', 'skill-journey:push-synced', 'skill-journey:last-backup', 'skill-journey:snapshot:v1', 'skill-journey:draft:v1']);
 test('kaynaktaki tüm veri anahtarları yedeğe giriyor', () => {
   const dir = new URL('../src/', import.meta.url);
   const keys = new Set(readdirSync(dir).filter(name => /\.tsx?$/.test(name))
