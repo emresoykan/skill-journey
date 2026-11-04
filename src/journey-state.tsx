@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { analyzeExperience, displaySkill, isNearDuplicate, isWithin, type Analysis } from './skillEngine';
 import { loadBadges, loadDraft, saveDraft, loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, runMigrations, saveBadges, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, StorageConflictError, type EarnedBadges, type Entry } from './storage';
 import { cleanTodoTitle, todoTitleError, visibleTodos, type Todo } from './todos';
-import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
+import { cleanLearning, dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Learning, type Reviews } from './learning';
 import { amountDescription, amountReached, dayKey, DEFAULT_REMINDER, formatAmount, habitAnalysis, habitCountToday, habitGoal, habitSettingsError, habitTitleError, isAmountHabit, MAX_AMOUNT, routinesProgress, type Habit, type HabitCounts, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
 import { capAwards, correctSkillAward, removeSkillAward } from './skillCorrections';
@@ -191,9 +191,9 @@ function useJourneyState() {
     return next.id;
   }
 
-  async function addLearning(term: string, meaning: string): Promise<boolean> {
-    const learning = { term: term.trim().replace(/\s+/g, ' '), meaning: meaning.trim().replace(/\s+/g, ' ') };
-    const problem = learningError(learning.term, learning.meaning, entries);
+  async function addLearning(input: Learning): Promise<boolean> {
+    const learning = cleanLearning(input);
+    const problem = learningError(learning.term, learning.meaning, entries, new Date(), reviews);
     if (problem) { setLearnError(problem); return false; }
     if (busy) return false;
     setBusy(true);

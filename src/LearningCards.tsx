@@ -3,11 +3,13 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { dayLabel } from './game';
 import { useJourney } from './journey-state';
 import { MicButton } from './MicButton';
-import { isMastered, LEARN_XP, REVIEW_INTERVALS, REVIEW_XP, reviewEntryToday, reviewStateOf, splitLearning, stageIcon } from './learning';
+import { isMastered, LEARN_XP, LEARNING_LIMITS, learningCategories, REVIEW_INTERVALS, REVIEW_XP, reviewEntryToday, reviewStateOf, splitLearning, stageIcon, upcomingReviews, type ReviewState } from './learning';
 import type { Entry } from './storage';
 
 const teal = '#166B65';
 const gold = '#F5C45A';
+// Tekrar sonuçları: "✓ 3 · ✗ 1" (sayım bu özellikten önceki tekrarları içermez).
+const score = (state: ReviewState) => state.correct || state.wrong ? `✓ ${state.correct ?? 0} · ✗ ${state.wrong ?? 0}` : '';
 const formatDue = (due: string) => {
   const [year, month, day] = due.split('-').map(Number);
   return new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' }).format(new Date(year, month - 1, day));
@@ -15,9 +17,14 @@ const formatDue = (due: string) => {
 
 // Bugün sekmesi: öğrenilen kavram/kelime ve anlamı.
 export function LearnCard({ children }: { children?: ReactNode }) {
-  const { busy, loading, learnError, setLearnError, addLearning } = useJourney();
+  const { busy, loading, learnError, setLearnError, addLearning, entries } = useJourney();
   const [text, setText] = useState('');
+  const [details, setDetails] = useState(false);
+  const [explanation, setExplanation] = useState('');
+  const [example, setExample] = useState('');
+  const [category, setCategory] = useState('');
   if (loading) return null;
+  const categories = learningCategories(entries);
   const parsed = splitLearning(text);
   const change = (value: string) => { setText(value); setLearnError(''); };
 
@@ -26,7 +33,9 @@ export function LearnCard({ children }: { children?: ReactNode }) {
       setLearnError('Anlamını da yaz: kavramla arasına “:” koy (sesle “anlamı” de). Örn. Serendipity: şans eseri güzel bir keşif');
       return;
     }
-    if (await addLearning(parsed.term, parsed.meaning)) setText('');
+    if (!(await addLearning({ ...parsed, explanation, example, category }))) return;
+    setText(''); setExplanation(''); setExample('');
+    // Kategori bir sonraki kavram için kalır: aynı konudan art arda kelime eklenir.
   }
 
   return <View style={s.card}>
@@ -48,6 +57,23 @@ export function LearnCard({ children }: { children?: ReactNode }) {
       style={s.input}
     /><MicButton value={text} onChangeText={change} size={48} /></View>
     {parsed.meaning ? <Text style={s.preview} numberOfLines={2}>{`Kavram: ${parsed.term}  ·  Anlamı: ${parsed.meaning}`}</Text> : null}
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: details }} onPress={() => setDetails(!details)} style={s.detailsToggle}>
+      <Text style={s.detailsToggleText}>{details ? '− Ayrıntıları gizle' : `+ Açıklama, örnek, kategori${category ? ` (${category})` : ''}`}</Text>
+    </Pressable>
+    {details ? <View style={s.details}>
+      <TextInput accessibilityLabel="Açıklama (isteğe bağlı)" placeholder="Açıklama: nasıl, neden, ne zaman kullanılır" placeholderTextColor="#9AA6A8"
+        multiline maxLength={LEARNING_LIMITS.explanation} value={explanation} onChangeText={setExplanation} style={[s.input, s.multiline]} />
+      <TextInput accessibilityLabel="Örnek (isteğe bağlı)" placeholder="Örnek cümle ya da durum" placeholderTextColor="#9AA6A8"
+        maxLength={LEARNING_LIMITS.example} value={example} onChangeText={setExample} style={[s.input, { marginTop: 8 }]} />
+      <TextInput accessibilityLabel="Kategori (isteğe bağlı)" placeholder="Kategori: İngilizce, Finans, Tarih…" placeholderTextColor="#9AA6A8"
+        maxLength={LEARNING_LIMITS.category} value={category} onChangeText={setCategory} style={[s.input, { marginTop: 8 }]} />
+      {categories.length ? <View style={s.chips}>
+        {categories.slice(0, 8).map(item => <Pressable key={item} accessibilityRole="radio" accessibilityState={{ selected: item === category }} aria-checked={item === category}
+          onPress={() => setCategory(item === category ? '' : item)} style={[s.chip, item === category && s.chipOn]}>
+          <Text style={[s.chipText, item === category && s.chipTextOn]}>{item}</Text>
+        </Pressable>)}
+      </View> : null}
+    </View> : null}
     <Pressable accessibilityRole="button" disabled={busy || !text.trim()} onPress={submit} style={[s.primary, (busy || !text.trim()) && { opacity: 0.45 }]}>
       <Text style={s.primaryText}>Öğrendiklerime ekle</Text>
     </Pressable>
@@ -82,9 +108,15 @@ function ReviewItem({ entry }: { entry: Entry }) {
   const state = reviewStateOf(entry, reviews);
   return <View>
     <Text style={s.when}>{stageIcon(state)} {dayLabel(new Date(entry.createdAt))} öğrendin · hatırlıyor musun?</Text>
+    {entry.learning!.category ? <Text style={s.category}>{entry.learning!.category}</Text> : null}
     <Text style={s.term}>{entry.learning!.term}</Text>
     {revealed ? <>
-      <Text style={s.meaning}>{entry.learning!.meaning}</Text>
+      <View style={s.answerBox}>
+        <Text style={s.meaningText}>{entry.learning!.meaning}</Text>
+        {entry.learning!.explanation ? <Text style={s.explanation}>{entry.learning!.explanation}</Text> : null}
+        {entry.learning!.example ? <Text style={s.example}>{`Örnek: ${entry.learning!.example}`}</Text> : null}
+      </View>
+      {score(state) ? <Text style={s.score}>{score(state)}</Text> : null}
       <View style={s.answers}>
         <Pressable accessibilityRole="button" disabled={busy} onPress={() => reviewLearning(entry, false)} style={[s.answer, s.forgot]}>
           <Text style={s.forgotText}>✗ Unuttum</Text>
@@ -103,12 +135,17 @@ function ReviewItem({ entry }: { entry: Entry }) {
 export function LearningNotebook({ query }: { query: string }) {
   const { entries, reviews, loading } = useJourney();
   const [expanded, setExpanded] = useState(false);
+  const [category, setCategory] = useState<string | null>(null);
   if (loading) return null;
   const terms = query.trim().toLocaleLowerCase('tr-TR').split(/\s+/).filter(Boolean);
   const all = entries.filter(entry => entry.learning);
   if (!all.length) return null;
+  const categories = learningCategories(entries);
+  const upcoming = upcomingReviews(entries, reviews);
   const matching = all.filter(entry => {
-    const text = `${entry.learning!.term} ${entry.learning!.meaning}`.toLocaleLowerCase('tr-TR');
+    if (category && entry.learning!.category !== category) return false;
+    const l = entry.learning!;
+    const text = [l.term, l.meaning, l.explanation, l.example, l.category].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');
     return terms.every(term => text.includes(term));
   });
   const mastered = all.filter(entry => isMastered(reviewStateOf(entry, reviews))).length;
@@ -119,7 +156,13 @@ export function LearningNotebook({ query }: { query: string }) {
       <Text style={s.title}>📚 Öğrendiklerim</Text>
       <Text style={s.countChip}>{all.length} · 🌳 {mastered}</Text>
     </View>
-    <Text style={s.sub}>🌱 yeni · 🌿 oturuyor · 🌳 ustalaşıldı ({REVIEW_INTERVALS.length} tekrar)</Text>
+    <Text style={s.sub}>🌱 yeni · 🌿 oturuyor · 🌳 ustalaşıldı ({REVIEW_INTERVALS.length} tekrar){upcoming ? ` · Önümüzdeki 7 günde ${upcoming} tekrar` : ''}</Text>
+    {categories.length ? <View style={s.chips}>
+      {[null, ...categories].map(item => <Pressable key={item ?? 'all'} accessibilityRole="radio" accessibilityState={{ selected: item === category }} aria-checked={item === category}
+        onPress={() => setCategory(item)} style={[s.chip, item === category && s.chipOn]}>
+        <Text style={[s.chipText, item === category && s.chipTextOn]}>{item ?? 'Tümü'}</Text>
+      </Pressable>)}
+    </View> : null}
     {shown.length === 0 ? <Text style={s.sub}>Aramana uyan kavram yok.</Text> : shown.map(entry => {
       const state = reviewStateOf(entry, reviews);
       return <View key={entry.id} style={s.noteRow}>
@@ -127,7 +170,9 @@ export function LearningNotebook({ query }: { query: string }) {
         <View style={{ flex: 1 }}>
           <Text style={s.noteTerm}>{entry.learning!.term}</Text>
           <Text style={s.noteMeaning}>{entry.learning!.meaning}</Text>
-          <Text style={s.noteMeta}>{isMastered(state) ? 'Ustalaşıldı' : `Sıradaki tekrar: ${formatDue(state.due)}`}</Text>
+          {entry.learning!.explanation ? <Text style={s.noteExtra} numberOfLines={3}>{entry.learning!.explanation}</Text> : null}
+          {entry.learning!.example ? <Text style={s.noteExample} numberOfLines={2}>{`Örnek: ${entry.learning!.example}`}</Text> : null}
+          <Text style={s.noteMeta}>{[entry.learning!.category, isMastered(state) ? 'Ustalaşıldı' : `Sıradaki tekrar: ${formatDue(state.due)}`, score(state)].filter(Boolean).join(' · ')}</Text>
         </View>
       </View>;
     })}
@@ -154,7 +199,23 @@ const s = StyleSheet.create({
   error: { color: '#B34242', fontSize: 12, marginTop: 8 },
   when: { color: '#6B62A8', fontSize: 12, fontWeight: '700', marginTop: 12 },
   term: { color: '#182637', fontSize: 26, fontWeight: '800', marginTop: 6 },
-  meaning: { color: '#344150', fontSize: 15, lineHeight: 22, marginTop: 8, backgroundColor: 'white', borderRadius: 12, padding: 12, overflow: 'hidden' },
+  answerBox: { marginTop: 8, backgroundColor: 'white', borderRadius: 12, padding: 12 },
+  meaningText: { color: '#344150', fontSize: 15, lineHeight: 22 },
+  explanation: { color: '#4F5D6A', fontSize: 13, lineHeight: 19, marginTop: 6 },
+  example: { color: '#6B62A8', fontSize: 13, lineHeight: 19, marginTop: 6, fontStyle: 'italic' },
+  score: { color: '#6B62A8', fontSize: 11, fontWeight: '700', marginTop: 6 },
+  category: { alignSelf: 'flex-start', color: '#4B3FA0', backgroundColor: '#E6E0FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, fontSize: 11, fontWeight: '800', marginTop: 8, overflow: 'hidden' },
+  detailsToggle: { marginTop: 8, paddingVertical: 4 },
+  detailsToggleText: { color: teal, fontSize: 12, fontWeight: '800' },
+  details: { marginTop: 2 },
+  multiline: { height: 72, paddingTop: 10, textAlignVertical: 'top' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  chip: { borderRadius: 14, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', paddingHorizontal: 10, paddingVertical: 6 },
+  chipOn: { backgroundColor: teal, borderColor: teal },
+  chipText: { color: '#3D4B58', fontSize: 12, fontWeight: '700' },
+  chipTextOn: { color: 'white' },
+  noteExtra: { color: '#4F5D6A', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  noteExample: { color: '#6B62A8', fontSize: 12, lineHeight: 17, marginTop: 3, fontStyle: 'italic' },
   reveal: { marginTop: 12, height: 46, borderRadius: 12, borderWidth: 1, borderColor: '#C9BFF5', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
   revealText: { color: '#4B3FA0', fontSize: 14, fontWeight: '800' },
   answers: { flexDirection: 'row', gap: 10, marginTop: 12 },

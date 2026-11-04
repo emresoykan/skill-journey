@@ -21,6 +21,7 @@ import { Confetti } from './Confetti';
 import { setSoundEnabled, useSoundEnabled } from './sounds';
 import { useHydrated } from './useHydrated';
 import { GrowthOverview } from './GrowthOverview';
+import { WeeklyReviewCard } from './WeeklyReviewCard';
 import { SkillTree } from './SkillTree';
 import { MemoryFilters } from './MemoryFilters';
 import { discoveriesByEntry, filterEntries, filterOptions, type DateRange } from './insights';
@@ -34,7 +35,7 @@ const growthTabs: { key: GrowthTab; label: string }[] = [
 ];
 const teal = '#166B65';
 export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memories' }) {
-  const { earnedBadges,syncNotice,dismissSyncNotice,analyzing,entries,draft,setDraft,reward,quest,questDone,streak,today,busy,loading,error,setError,timelineError,editingId,totalXp,skillTotals,addMoment,correctAward } = useJourney();
+  const { dueReviews,earnedBadges,syncNotice,dismissSyncNotice,analyzing,entries,draft,setDraft,reward,quest,questDone,streak,today,busy,loading,error,setError,timelineError,editingId,totalXp,skillTotals,addMoment,correctAward } = useJourney();
   const soundOn = useSoundEnabled();
   const hydrated = useHydrated();
   const [query, setQuery] = useState('');
@@ -67,6 +68,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         </View>
         {loading ? <ActivityIndicator color={teal} /> : growthTab === 'overview' ? <>
           <PlayerCard totalXp={totalXp} streak={streak} />
+          <WeeklyReviewCard entries={entries} earned={earnedBadges} dueReviews={dueReviews.length} />
           <GrowthOverview entries={entries} />
           <BackupCard />
         </> : growthTab === 'skills' ? <>

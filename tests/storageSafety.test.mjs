@@ -66,3 +66,11 @@ test('motor ayrıntıları doğrulanır; bozuksa kayıt okunur ama ayrıntı dü
   assert.equal(badEntry.suggestions, undefined);
   assert.equal(badEntry.xpNote, undefined);
 });
+
+test('öğrenme kartının isteğe bağlı alanları korunur, geçersizler düşer', () => {
+  const card = entry('l', { learning: { term: 'Hedge', meaning: 'korunma', explanation: 'Riski azaltmak için ters pozisyon', example: 'Forward', category: 'Finans', bilinmeyen: 1 } });
+  const bad = entry('m', { learning: { term: 'X', meaning: 'Y', explanation: 5, category: '  ' } });
+  const [ok, broken] = parseEntries([card, bad]).entries;
+  assert.deepEqual(ok.learning, { term: 'Hedge', meaning: 'korunma', explanation: 'Riski azaltmak için ters pozisyon', example: 'Forward', category: 'Finans' });
+  assert.deepEqual(broken.learning, { term: 'X', meaning: 'Y' });
+});

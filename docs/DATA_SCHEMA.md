@@ -15,7 +15,7 @@ uygulama açılırken, veriler okunmadan önce çalışır (bkz. "Göçler").
 | `skill-journey:habits:v1` | `Habit[]` | `src/storage.ts`, `src/routines.ts` | evet |
 | `skill-journey:habit-counts:v1` | `{ [habitId]: { day, count } }` — miktarlı rutinin bugünkü toplamı | `src/storage.ts` | evet |
 | `skill-journey:todos:v1` | `Todo[]` | `src/todos.ts` | evet |
-| `skill-journey:reviews:v1` | `{ [entryId]: { stage, due } }` | `src/learning.ts` | evet |
+| `skill-journey:reviews:v1` | `{ [entryId]: { stage, due, correct?, wrong? } }` | `src/learning.ts` | evet |
 | `skill-journey:reminder:v1` | `{ enabled, hour, minute }` | `src/reminderStore.ts` | evet |
 | `skill-journey:sound:v1` | `"on"` / `"off"` | `src/sounds.ts` | evet |
 | `skill-journey:entry-mode:v1` | `"done"` / `"todo"` | `src/TodayLog.tsx` | evet |
@@ -42,7 +42,8 @@ type Entry = {
   bonusXp?: number;      // günlük görev bonusu; beceriye değil toplam XP'ye eklenir
   habitId?: string;      // rutin tikiyle oluştuysa
   measures?: { steps?: number; duration?: number; pages?: number };
-  learning?: { term: string; meaning: string };
+  learning?: { term: string; meaning: string; explanation?: string; example?: string; category?: string };
+                          // explanation/example/category isteğe bağlı; boşsa alan hiç yazılmaz
   review?: { count: number }; // günün tekrar kaydı: kaç kavram hatırlandı
   // Yalnız 2026-10-24 sonrası, yeni motorla oluşan kayıtlarda (eski kayıtlar değiştirilmedi):
   tz?: string;            // kaydın yazıldığı IANA saat dilimi ("Europe/Istanbul")
@@ -68,7 +69,8 @@ kayıtlardan yeniden hesaplanır.
 // measures/goalMinutes eski sürümün sabit ölçüleridir; artık kullanılmaz, silinmez.
 type Habit = { id; title; icon; skill; createdAt; target?; unit?; goalMinutes?; measures? };
 type Todo = { id; title; createdAt; doneAt?; entryId? };   // tamamlanınca entryId ilgili Entry'yi gösterir
-type ReviewState = { stage: number; due: 'YYYY-MM-DD' | '' }; // '' = ustalaşıldı
+type ReviewState = { stage: number; due: 'YYYY-MM-DD' | ''; correct?: number; wrong?: number };
+// '' = ustalaşıldı. correct/wrong: tekrarlarda kaç kez hatırlandı/unutuldu (Faz 5'ten önceki durumlarda yok, 0 sayılır)
 type QuarantineItem = { key: string; at: string; raw: string }; // okunamayan verinin ham metni
 ```
 

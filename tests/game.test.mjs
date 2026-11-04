@@ -69,3 +69,9 @@ test('rozet koşulları: kayıt sayısı, beceri çeşidi, kombo', () => {
   for (const id of ['first', 'skills3', 'combo', 'streak3']) assert.ok(unlocked.has(id), id);
   assert.ok(!unlocked.has('entries5'));
 });
+
+test('sayıya yönelme eki', async () => {
+  const { toNumber } = await import('../src/game.ts');
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 1000].map(toNumber),
+    ["0'a", "1'e", "2'ye", "3'e", "4'e", "5'e", "6'ya", "7'ye", "8'e", "9'a", "10'a", "11'e", "12'ye", "20'ye", "30'a", "40'a", "50'ye", "60'a", "70'e", "80'e", "90'a", "100'e", "200'e", "1000'e"]);
+});
