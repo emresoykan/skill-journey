@@ -26,6 +26,7 @@ const engineDetails = (entry: Entry) => {
     suggestions: suggestions.length ? suggestions : undefined,
     xpNote: typeof entry.xpNote === 'string' ? entry.xpNote : undefined,
     tz: typeof entry.tz === 'string' ? entry.tz : undefined,
+    amount: entry.amount && typeof entry.amount.value === 'number' && entry.amount.value > 0 && typeof entry.amount.unit === 'string' ? { value: entry.amount.value, unit: entry.amount.unit } : undefined,
   };
 };
 

@@ -3,243 +3,207 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { habitStreak } from './game';
 import { useJourney } from './journey-state';
 import { displaySkill } from './skillEngine';
-import { availablePresets, formatDuration, formatMeasures, formatTime, GOAL_STEP_MINUTES, HABIT_XP, habitGoal, habitIcons, habitMeasures, MAX_GOAL_MINUTES, MAX_HABITS, MAX_TARGET, measureError, measureNames, parseAmount, reminderTimes, toMinutes, weeklyTotals, type Habit, type HabitPreset, type MeasureValues } from './routines';
+import { formatAmount, formatMeasures, formatTime, HABIT_XP, habitGoal, habitIcons, isAmountHabit, MAX_HABITS, parseAmount, reminderTimes, weeklyTotals, type Habit } from './routines';
 import { reminderNote, remindersSupported } from './reminders';
 import { MicButton } from './MicButton';
+import { SkillPicker } from './SkillPicker';
 
 const teal = '#166B65';
 const gold = '#F5C45A';
 
-// Bugün sekmesi: her gün tekrarlanan rutinler; dokununca tik atılır ya da kaldırılır.
-export function Routines() {
-  const { habits, routines, entries, busy, loading, habitError, setHabitError, toggleHabit, stepHabit, habitCount, addHabit } = useJourney();
-  const [editing, setEditing] = useState(false);
-  const [focusAdd, setFocusAdd] = useState(false);
-  const [title, setTitle] = useState('');
-  const [measuring, setMeasuring] = useState<string | null>(null);
-  if (loading) return null;
-  const managing = editing || habits.length === 0;
-  const presets = availablePresets(habits);
+// Yazılan hedef/miktar: boş → null, geçersiz → NaN, aksi halde tam sayı.
+const readNumber = (text: string) => {
+  const value = parseAmount(text);
+  return value === null || Number.isNaN(value) || Number.isInteger(value) ? value : NaN;
+};
 
-  // Ekledikten sonra panel açık kalır; birkaç rutin art arda eklenip "Bitti" ile kapatılır.
-  async function add(name: string, preset?: HabitPreset) {
-    if (!(await addHabit(name, preset))) return;
-    setEditing(true);
-    if (!preset) setTitle('');
-  }
-  const submit = () => add(title);
+// Bugün sekmesi: kullanıcının kendi tanımladığı rutinler. Tik rutinine dokununca tik atılır ya da kaldırılır;
+// miktarlı rutine dokununca bugünkü miktar girilir ("İngilizce · 20 kelime").
+export function Routines() {
+  const { habits, routines, entries, busy, loading, habitError, setHabitError, toggleHabit, habitCount } = useJourney();
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [logging, setLogging] = useState<string | null>(null);
+  if (loading) return null;
+  const showAdd = !editing && (adding || habits.length === 0) && habits.length < MAX_HABITS;
 
   return <View style={s.card}>
     <View style={s.head}>
       <Text style={s.title}>Rutinlerim</Text>
       <View style={s.headRight}>
         {habits.length ? <Text style={[s.count, routines.complete && s.countDone]}>{routines.complete ? '🌟 Hepsi tamam' : `${routines.count}/${routines.total}`}</Text> : null}
-        {habits.length ? <Pressable accessibilityRole="button" hitSlop={6} onPress={() => { setEditing(!editing); setFocusAdd(false); setHabitError(''); }} style={[s.editButton, editing && s.editButtonOn]}>
+        {habits.length ? <Pressable accessibilityRole="button" hitSlop={6} onPress={() => { setEditing(!editing); setAdding(false); setLogging(null); setHabitError(''); }} style={[s.editButton, editing && s.editButtonOn]}>
           <Text style={[s.editButtonText, editing && s.editButtonTextOn]}>{editing ? '✓ Bitti' : '✏️ Düzenle'}</Text>
         </Pressable> : null}
       </View>
     </View>
     {habits.length ? <View style={s.track}><View style={[s.fill, { width: `${routines.count / routines.total * 100}%` }]} /></View>
-      : <Text style={s.intro}>Her gün tekrarlamak istediğin küçük alışkanlıkları ekle. Her tik +{HABIT_XP} XP getirir ve kendi serisini tutar.</Text>}
+      : <Text style={s.intro}>Her gün takip etmek istediğin şeyi kendin tanımla: tek tikle yapılan (ör. Meditasyon) ya da miktarı olan (ör. İngilizce · kelime). Her gün +{HABIT_XP} XP getirir ve kendi serisini tutar.</Text>}
 
     {habits.map(habit => {
       if (editing) return <HabitEditRow key={habit.id} habit={habit} />;
       const done = routines.done.has(habit.id);
       const streak = habitStreak(entries, habit.id).count;
-      // Sayılı rutin (ör. 8 bardak su): her dokunuş bir ekler, "−" son eklemeyi geri alır.
-      const { target, unit } = habitGoal(habit);
-      const counted = target > 1;
-      const count = habitCount(habit);
-      // Ölçülü rutin (ör. yürüyüşte adım ve süre): dokununca ölçü formu açılır, tik formdan atılır.
-      const measured = !counted && habitMeasures(habit).length > 0;
-      const logged = routines.done.get(habit.id)?.measures;
-      const goalMinutes = measured ? habit.goalMinutes : undefined;
-      const summary = measured ? [formatMeasures(logged), goalMinutes && done ? `hedef ${formatDuration(goalMinutes)}${(logged?.duration ?? 0) >= goalMinutes ? ' ✓' : ''}` : ''].filter(Boolean).join(' · ') : '';
-      return <View key={habit.id}><View style={s.rowWrap}>
+      const amount = isAmountHabit(habit);
+      const { target, unit, hasTarget } = habitGoal(habit);
+      const count = amount ? habitCount(habit) : 0;
+      const progress = amount ? `${formatAmount(count)}${hasTarget ? `/${formatAmount(target)}` : ''} ${unit}` : '';
+      return <View key={habit.id}>
         <Pressable
-          accessibilityRole={counted || measured ? 'button' : 'checkbox'}
-          accessibilityState={counted ? { disabled: busy || done } : measured ? { expanded: measuring === habit.id, disabled: busy } : { checked: done, disabled: busy }}
-          aria-checked={counted || measured ? undefined : done}
-          accessibilityLabel={`${habit.title}${counted ? `, ${count}/${target} ${unit}${done ? '' : `, bir ${unit} ekle`}` : ''}${measured ? `${done ? `, yapıldı${summary ? `: ${summary}` : ''}` : ''}, ölçüleri gir` : ''}${streak ? `, ${streak} günlük seri` : ''}`}
-          disabled={busy || (counted && done)}
-          onPress={() => measured ? setMeasuring(measuring === habit.id ? null : habit.id) : toggleHabit(habit)}
+          accessibilityRole={amount ? 'button' : 'checkbox'}
+          accessibilityState={amount ? { expanded: logging === habit.id, disabled: busy } : { checked: done, disabled: busy }}
+          aria-checked={amount ? undefined : done}
+          accessibilityLabel={`${habit.title}${amount ? `, bugün ${progress}, miktar gir` : ''}${streak ? `, ${streak} günlük seri` : ''}`}
+          disabled={busy}
+          onPress={() => amount ? setLogging(logging === habit.id ? null : habit.id) : toggleHabit(habit)}
           style={[s.row, done && s.rowDone]}
         >
           <Text style={s.icon}>{habit.icon}</Text>
           <View style={{ flex: 1 }}>
             <Text style={[s.habitTitle, done && s.habitTitleDone]}>{habit.title}</Text>
-            {summary ? <Text style={s.summary}>{summary}</Text> : null}
-            <Text style={s.meta}>{counted ? `${count}/${target} ${unit} · ` : ''}{goalMinutes && !done ? `Hedef ${formatDuration(goalMinutes)} · ` : ''}{displaySkill(habit.skill)} · +{HABIT_XP} XP{streak ? `  ·  🔥 ${streak} gün` : ''}</Text>
-            {counted ? <View style={s.dots}>
-              {Array.from({ length: target }, (_, i) => <View key={i} style={[s.dot, i < count && s.dotOn]} />)}
-            </View> : null}
+            {amount ? <Text style={s.summary}>{`Bugün ${progress}`}</Text> : null}
+            <Text style={s.meta}>{displaySkill(habit.skill)} · +{HABIT_XP} XP{streak ? `  ·  🔥 ${streak} gün` : ''}</Text>
+            {hasTarget ? <View style={s.amountTrack}><View style={[s.amountFill, { width: `${Math.min(1, count / target) * 100}%` }]} /></View> : null}
           </View>
-          {counted && !done ? <View style={s.circle}><Text style={s.plus}>+</Text></View>
+          {amount && !done ? <View style={s.circle}><Text style={s.plus}>+</Text></View>
             : <View style={[s.circle, done && s.circleDone]}><Text style={s.circleMark}>{done ? '✓' : ''}</Text></View>}
         </Pressable>
-        {counted && count > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`${habit.title}: bir ${unit} geri al`} hitSlop={6} disabled={busy} onPress={() => stepHabit(habit, -1)} style={s.minus}>
-          <Text style={s.minusText}>−</Text>
-        </Pressable> : null}
-      </View>
-      {measured && measuring === habit.id ? <MeasureForm habit={habit} onClose={() => setMeasuring(null)} /> : null}
+        {logging === habit.id ? <AmountForm habit={habit} onClose={() => setLogging(null)} /> : null}
       </View>;
     })}
 
-    {!managing && habits.length < MAX_HABITS ? <Pressable accessibilityRole="button" onPress={() => { setEditing(true); setFocusAdd(true); setHabitError(''); }} style={s.addRoutine}>
+    {!editing && !showAdd && habits.length < MAX_HABITS ? <Pressable accessibilityRole="button" onPress={() => { setAdding(true); setHabitError(''); }} style={s.addRoutine}>
       <Text style={s.addRoutineText}>+ Rutin ekle</Text>
     </Pressable> : null}
-
-    {managing ? <View style={s.manage}>
-      {habits.length < MAX_HABITS ? <View style={s.inputRow}>
-        <TextInput
-          accessibilityLabel="Yeni rutin"
-          autoFocus={focusAdd}
-          placeholder="Yeni rutin, örn. Sabah esneme"
-          placeholderTextColor="#9AA6A8"
-          maxLength={60}
-          returnKeyType="done"
-          submitBehavior="submit"
-          onSubmitEditing={submit}
-          value={title}
-          onChangeText={value => { setTitle(value); setHabitError(''); }}
-          style={s.input}
-        />
-        <MicButton value={title} onChangeText={value => { setTitle(value); setHabitError(''); }} size={46} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Rutin ekle" disabled={busy || !title.trim()} onPress={submit} style={[s.add, (busy || !title.trim()) && { opacity: 0.45 }]}>
-          <Text style={s.addText}>Ekle</Text>
-        </Pressable>
-      </View> : null}
-      {presets.length && habits.length < MAX_HABITS ? <>
-        <Text style={s.presetLabel}>Hazır öneriler</Text>
-        <View style={s.presets}>
-          {presets.map(preset => <Pressable key={preset.title} accessibilityRole="button" accessibilityLabel={`Rutin ekle: ${preset.title}`} disabled={busy} onPress={() => add(preset.title, preset)} style={s.chip}>
-            <Text style={s.chipText}>{preset.icon} {preset.title}</Text>
-          </Pressable>)}
-        </View>
-      </> : null}
-      {editing ? <Text style={s.note}>Simgeye dokunarak değiştir, adın üstüne dokunarak yeniden adlandır.</Text> : null}
-    </View> : null}
+    {showAdd ? <AddHabitForm canCancel={habits.length > 0} onClose={() => setAdding(false)} /> : null}
+    {editing ? <Text style={s.note}>Simgeye dokunarak değiştir; adı, birimi ve hedefi buradan düzenle.</Text> : null}
     {habitError ? <Text style={s.error}>{habitError}</Text> : null}
     {habits.length && !editing ? <Reminder /> : null}
   </View>;
 }
 
-// Ölçülü rutinde tik formu: adım, süre (dk ya da saat), sayfa. Boş bırakılan ölçü sorulmamış sayılır;
-// hepsi boşsa yalnız tik atılır. Bugün tikliyse ölçüler güncellenir ya da tik kaldırılır.
-function MeasureForm({ habit, onClose }: { habit: Habit; onClose: () => void }) {
-  const { busy, routines, logHabit, toggleHabit } = useJourney();
-  const done = routines.done.get(habit.id);
-  const measures = habitMeasures(habit);
-  const [steps, setSteps] = useState(done?.measures?.steps ? String(done.measures.steps) : '');
-  const [duration, setDuration] = useState(done?.measures?.duration ? String(done.measures.duration) : '');
-  const [durationUnit, setDurationUnit] = useState<'dk' | 'saat'>('dk');
-  const [pages, setPages] = useState(done?.measures?.pages ? String(done.measures.pages) : '');
+// Miktarlı rutinde bugünkü miktar: yazılan sayı bugünkü toplama eklenir. "+1" hızlı ekleme (ör. bir bardak su).
+function AmountForm({ habit, onClose }: { habit: Habit; onClose: () => void }) {
+  const { busy, habitCount, setHabitAmount } = useJourney();
+  const { target, unit, hasTarget } = habitGoal(habit);
+  const count = habitCount(habit);
+  const [value, setValue] = useState('');
   const [error, setError] = useState('');
 
-  async function save() {
-    const values: MeasureValues = {};
-    const stepCount = measures.includes('steps') ? parseAmount(steps) : null;
-    const time = measures.includes('duration') ? parseAmount(duration, durationUnit === 'saat') : null;
-    const pageCount = measures.includes('pages') ? parseAmount(pages) : null;
-    if (stepCount !== null) values.steps = stepCount;
-    if (time !== null) values.duration = Number.isNaN(time) ? NaN : toMinutes(time, durationUnit);
-    if (pageCount !== null) values.pages = pageCount;
-    const problem = measureError(values);
-    if (problem) { setError(problem); return; }
-    if (await logHabit(habit, values)) onClose();
+  async function add(amount: number | null) {
+    if (amount === null || Number.isNaN(amount)) { setError(`Kaç ${unit} olduğunu tam sayı olarak yaz.`); return; }
+    if (await setHabitAmount(habit, count + amount)) { setValue(''); setError(''); }
   }
-  const field = (label: string, value: string, onChange: (text: string) => void, placeholder: string, decimal = false) =>
-    <TextInput accessibilityLabel={`${habit.title}: ${label}`} value={value} onChangeText={text => { onChange(text); setError(''); }} placeholder={placeholder} placeholderTextColor="#9AA6A8"
-      inputMode={decimal ? 'decimal' : 'numeric'} returnKeyType="done" onSubmitEditing={save} maxLength={8} style={s.fieldInput} />;
 
   return <View style={s.measure}>
-    <Text style={s.measureTitle}>{done ? 'Bugünkü ölçüler' : 'Bugün ne kadar?'}{habit.goalMinutes ? `  ·  hedef ${formatDuration(habit.goalMinutes)}` : ''}</Text>
-    {measures.includes('steps') ? <View style={s.field}>
-      <Text style={s.fieldLabel}>{measureNames.steps}</Text>
-      {field(measureNames.steps, steps, setSteps, 'örn. 6500')}
-      <Text style={s.fieldUnit}>adım</Text>
-    </View> : null}
-    {measures.includes('duration') ? <View style={s.field}>
-      <Text style={s.fieldLabel}>{measureNames.duration}</Text>
-      {field(measureNames.duration, duration, setDuration, durationUnit === 'saat' ? 'örn. 1,5' : 'örn. 45', durationUnit === 'saat')}
-      <View style={s.unitToggle}>
-        {(['dk', 'saat'] as const).map(unit => <Pressable key={unit} accessibilityRole="radio" accessibilityState={{ selected: durationUnit === unit }} aria-checked={durationUnit === unit} onPress={() => { setDurationUnit(unit); setError(''); }} style={[s.unitPill, durationUnit === unit && s.unitPillOn]}>
-          <Text style={[s.unitText, durationUnit === unit && s.unitTextOn]}>{unit}</Text>
-        </Pressable>)}
-      </View>
-    </View> : null}
-    {measures.includes('pages') ? <View style={s.field}>
-      <Text style={s.fieldLabel}>{measureNames.pages}</Text>
-      {field(measureNames.pages, pages, setPages, 'örn. 30')}
-      <Text style={s.fieldUnit}>sayfa</Text>
-    </View> : null}
-    {error ? <Text accessibilityLiveRegion="polite" style={s.error}>{error}</Text> : <Text style={s.fieldNote}>Bilmediğini boş bırakabilirsin.</Text>}
+    <Text style={s.measureTitle}>{`Bugün: ${formatAmount(count)}${hasTarget ? ` / ${formatAmount(target)}` : ''} ${unit}${hasTarget && count >= target ? '  ✓' : ''}`}</Text>
+    <View style={s.field}>
+      <TextInput accessibilityLabel={`${habit.title}: eklenecek ${unit}`} value={value} onChangeText={text => { setValue(text); setError(''); }}
+        placeholder={`Kaç ${unit}?`} placeholderTextColor="#9AA6A8" inputMode="numeric" returnKeyType="done" onSubmitEditing={() => add(readNumber(value))} maxLength={7} style={s.fieldInput} />
+      <Pressable accessibilityRole="button" accessibilityLabel={`${habit.title}: ekle`} disabled={busy || !value.trim()} onPress={() => add(readNumber(value))} style={[s.saveButton, (busy || !value.trim()) && { opacity: 0.45 }]}>
+        <Text style={s.saveText}>Ekle</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${habit.title}: bir ${unit} ekle`} disabled={busy} onPress={() => add(1)} style={s.quick}>
+        <Text style={s.quickText}>+1</Text>
+      </Pressable>
+    </View>
+    {error ? <Text accessibilityLiveRegion="polite" style={s.error}>{error}</Text> : null}
     <View style={s.measureActions}>
-      {done ? <Pressable accessibilityRole="button" disabled={busy} onPress={async () => { await toggleHabit(habit); onClose(); }}><Text style={s.removeText}>Tiki kaldır</Text></Pressable> : null}
-      <Pressable accessibilityRole="button" onPress={onClose}><Text style={s.cancel}>Vazgeç</Text></Pressable>
-      <Pressable accessibilityRole="button" disabled={busy} onPress={save} style={[s.saveButton, busy && { opacity: 0.45 }]}>
-        <Text style={s.saveText}>{done ? 'Güncelle' : `Kaydet · +${HABIT_XP} XP`}</Text>
+      {count > 0 ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => setHabitAmount(habit, 0)}><Text style={s.removeText}>Bugünü sıfırla</Text></Pressable> : null}
+      <Pressable accessibilityRole="button" onPress={onClose}><Text style={s.cancel}>Tamam</Text></Pressable>
+    </View>
+  </View>;
+}
+
+// Yeni rutin: ad, isteğe bağlı birim ve günlük hedef. Birim yoksa rutin tek tikle yapılır.
+function AddHabitForm({ canCancel, onClose }: { canCancel: boolean; onClose: () => void }) {
+  const { busy, addHabit, setHabitError } = useJourney();
+  const [title, setTitle] = useState('');
+  const [unit, setUnit] = useState('');
+  const [target, setTarget] = useState('');
+
+  async function submit() {
+    const goal = target.trim() ? readNumber(target) : null;
+    if (goal !== null && Number.isNaN(goal)) { setHabitError('Günlük hedef tam sayı olmalı.'); return; }
+    if (!(await addHabit(title, { unit, target: goal }))) return;
+    setTitle(''); setUnit(''); setTarget('');
+    onClose();
+  }
+  const changeTitle = (value: string) => { setTitle(value); setHabitError(''); };
+
+  return <View style={s.manage}>
+    <View style={s.inputRow}>
+      <TextInput accessibilityLabel="Yeni rutin adı" placeholder="Rutin adı, örn. İngilizce" placeholderTextColor="#9AA6A8" maxLength={60}
+        returnKeyType="done" value={title} onChangeText={changeTitle} style={s.input} />
+      <MicButton value={title} onChangeText={changeTitle} size={46} />
+    </View>
+    <View style={s.inputRow}>
+      <TextInput accessibilityLabel="Birim (isteğe bağlı)" placeholder="Birim: kelime, sayfa, dk…" placeholderTextColor="#9AA6A8" maxLength={20}
+        value={unit} onChangeText={value => { setUnit(value); setHabitError(''); }} style={s.input} />
+      <TextInput accessibilityLabel="Günlük hedef (isteğe bağlı)" placeholder="Hedef" placeholderTextColor="#9AA6A8" inputMode="numeric" maxLength={7}
+        value={target} onChangeText={value => { setTarget(value); setHabitError(''); }} style={[s.input, s.targetInput]} />
+    </View>
+    <Text style={s.help}>Birim yazarsan her gün miktar girersin (ör. 20 kelime). Boş bırakırsan rutin tek tikle yapılır. Hedef isteğe bağlı.</Text>
+    <View style={s.formActions}>
+      {canCancel ? <Pressable accessibilityRole="button" onPress={() => { onClose(); setHabitError(''); }}><Text style={s.cancel}>Vazgeç</Text></Pressable> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Rutini ekle" disabled={busy || !title.trim()} onPress={submit} style={[s.add, (busy || !title.trim()) && { opacity: 0.45 }]}>
+        <Text style={s.addText}>Ekle</Text>
       </Pressable>
     </View>
   </View>;
 }
 
-// Düzenleme modunda bir rutin: simge seçimi, yerinde yeniden adlandırma, onaylı kaldırma.
+// Düzenleme modunda bir rutin: simge, ad, birim, günlük hedef, beceri ve onaylı kaldırma.
 function HabitEditRow({ habit }: { habit: Habit }) {
-  const { busy, updateHabit, removeHabit } = useJourney();
-  const { target, unit } = habitGoal(habit);
-  // Süre ölçülü rutinde (yürüyüş, kitap, spor) hedef "günde kaç kez" değil, günlük süredir.
-  const measures = habitMeasures(habit);
-  const timed = measures.includes('duration');
-  const goalMinutes = habit.goalMinutes ?? 0;
+  const { busy, updateHabit, removeHabit, setHabitError } = useJourney();
   const [title, setTitle] = useState(habit.title);
+  const [unit, setUnit] = useState(habit.unit ?? '');
+  const [target, setTarget] = useState(habit.target && habit.unit ? String(habit.target) : '');
   const [picking, setPicking] = useState(false);
+  const [choosingSkill, setChoosingSkill] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const settingsChanged = unit.trim() !== (habit.unit ?? '') || target.trim() !== (habit.target && habit.unit ? String(habit.target) : '');
 
   // Klavyeden çıkınca (Enter dahil) ya da sesle söylenince kaydedilir; geçersizse eski ada döner.
   async function renameTo(next: string) {
     if (!next.trim() || next.trim() === habit.title) { setTitle(habit.title); return; }
     if (!(await updateHabit(habit.id, { title: next }))) setTitle(habit.title);
   }
-  const saveTitle = () => renameTo(title);
+  async function saveSettings() {
+    const goal = target.trim() ? readNumber(target) : null;
+    if (goal !== null && Number.isNaN(goal)) { setHabitError('Günlük hedef tam sayı olmalı.'); return; }
+    await updateHabit(habit.id, { unit, target: goal });
+  }
 
   return <View style={s.editRow}>
     <View style={s.editLine}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Simgeyi değiştir: ${habit.title}`} accessibilityState={{ expanded: picking }} onPress={() => setPicking(!picking)} style={[s.iconButton, picking && s.iconButtonOn]}>
         <Text style={s.icon}>{habit.icon}</Text>
       </Pressable>
-      <TextInput accessibilityLabel={`Rutin adı: ${habit.title}`} value={title} onChangeText={setTitle} onBlur={saveTitle} returnKeyType="done" maxLength={60} style={s.editInput} />
+      <TextInput accessibilityLabel={`Rutin adı: ${habit.title}`} value={title} onChangeText={setTitle} onBlur={() => renameTo(title)} returnKeyType="done" maxLength={60} style={s.editInput} />
       <MicButton value="" onChangeText={setTitle} onFinal={renameTo} size={44} />
       <Pressable accessibilityRole="button" accessibilityLabel={`Rutini kaldır: ${habit.title}`} onPress={() => setConfirming(true)} style={s.removePill}>
         <Text style={s.removeText}>Kaldır</Text>
       </Pressable>
     </View>
-    {timed ? <View style={s.goalLine}>
-      <Text style={s.goalLabel}>Günde</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Süre hedefini azalt: ${habit.title}`} disabled={busy || goalMinutes <= 0} onPress={() => updateHabit(habit.id, { goalMinutes: goalMinutes - GOAL_STEP_MINUTES })} style={[s.step, goalMinutes <= 0 && { opacity: 0.35 }]}>
-        <Text style={s.stepText}>−</Text>
+    <View style={s.goalLine}>
+      <TextInput accessibilityLabel={`Birim: ${habit.title}`} placeholder="Birim (boş: tek tik)" placeholderTextColor="#9AA6A8" maxLength={20} value={unit} onChangeText={setUnit} style={s.editInput} />
+      <TextInput accessibilityLabel={`Günlük hedef: ${habit.title}`} placeholder="Hedef" placeholderTextColor="#9AA6A8" inputMode="numeric" maxLength={7} value={target} onChangeText={setTarget} style={[s.editInput, s.targetInput]} />
+      <Pressable accessibilityRole="button" accessibilityLabel={`Birimi ve hedefi kaydet: ${habit.title}`} disabled={busy || !settingsChanged} onPress={saveSettings} style={[s.saveButton, (busy || !settingsChanged) && { opacity: 0.4 }]}>
+        <Text style={s.saveText}>Kaydet</Text>
       </Pressable>
-      <Text accessibilityLiveRegion="polite" style={s.goalValue}>{goalMinutes ? formatDuration(goalMinutes) : 'Hedef yok'}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Süre hedefini artır: ${habit.title}`} disabled={busy || goalMinutes >= MAX_GOAL_MINUTES} onPress={() => updateHabit(habit.id, { goalMinutes: goalMinutes + GOAL_STEP_MINUTES })} style={[s.step, goalMinutes >= MAX_GOAL_MINUTES && { opacity: 0.35 }]}>
-        <Text style={s.stepText}>+</Text>
-      </Pressable>
-    </View> : measures.length ? null : <View style={s.goalLine}>
-      <Text style={s.goalLabel}>Günde</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Hedefi azalt: ${habit.title}`} disabled={busy || target <= 1} onPress={() => updateHabit(habit.id, { target: target - 1 })} style={[s.step, target <= 1 && { opacity: 0.35 }]}>
-        <Text style={s.stepText}>−</Text>
-      </Pressable>
-      <Text accessibilityLiveRegion="polite" style={s.goalValue}>{target} {unit}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Hedefi artır: ${habit.title}`} disabled={busy || target >= MAX_TARGET} onPress={() => updateHabit(habit.id, { target: target + 1 })} style={[s.step, target >= MAX_TARGET && { opacity: 0.35 }]}>
-        <Text style={s.stepText}>+</Text>
-      </Pressable>
-    </View>}
+    </View>
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: choosingSkill }} onPress={() => setChoosingSkill(!choosingSkill)} style={s.skillLine}>
+      <Text style={s.meta}>{`Beceri: ${displaySkill(habit.skill)} · `}<Text style={s.link}>Değiştir</Text></Text>
+    </Pressable>
+    {choosingSkill ? <SkillPicker exclude={[habit.skill]} disabled={busy} onCancel={() => setChoosingSkill(false)} onPick={async skill => { if (await updateHabit(habit.id, { skill })) setChoosingSkill(false); }} /> : null}
     {picking ? <View style={s.iconGrid}>
       {habitIcons.map(icon => <Pressable key={icon} accessibilityRole="button" accessibilityLabel={`Simge seç: ${icon}`} accessibilityState={{ selected: icon === habit.icon }} disabled={busy} onPress={() => { setPicking(false); if (icon !== habit.icon) updateHabit(habit.id, { icon }); }} style={[s.iconChoice, icon === habit.icon && s.iconChoiceOn]}>
         <Text style={s.iconChoiceText}>{icon}</Text>
       </Pressable>)}
     </View> : null}
     {confirming ? <View style={s.confirm}>
-      <Text style={s.confirmText}>{`"${habit.title}" kaldırılsın mı? Geçmiş tikleri ve XP'si silinmez.`}</Text>
+      <Text style={s.confirmText}>{`"${habit.title}" kaldırılsın mı? Geçmiş kayıtları ve XP'si silinmez.`}</Text>
       <View style={s.confirmActions}>
         <Pressable accessibilityRole="button" onPress={() => setConfirming(false)}><Text style={s.cancel}>Vazgeç</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={busy} onPress={() => removeHabit(habit.id)}><Text style={s.removeText}>Evet, kaldır</Text></Pressable>
@@ -297,27 +261,31 @@ export function RoutineStreaks() {
   </View>;
 }
 
-// Gelişim sekmesi: ölçülü ve sayılı rutinlerin son 7 gündeki toplamları (adım, süre, sayfa, hedefe ulaşılan gün).
+// Gelişim sekmesi: miktarlı rutinlerin son 7 gündeki toplamı ("85 kelime · 5 gün"). Eski sürümde girilmiş
+// adım/süre/sayfa ölçüleri de toplanır.
 export function WeeklyTotals() {
-  const { habits, entries } = useJourney();
-  const tracked = habits.filter(habit => habitMeasures(habit).length > 0 || habitGoal(habit).target > 1);
-  if (!tracked.length) return null;
+  const { habits, entries, routines, habitCount } = useJourney();
+  // Bugün hedefe henüz ulaşılmadıysa kayıt yoktur; bugünkü miktar yine de haftanın toplamına eklenir.
+  const rows = habits.map(habit => {
+    const week = weeklyTotals(habit, entries);
+    const partial = isAmountHabit(habit) && !routines.done.has(habit.id) ? habitCount(habit) : 0;
+    return { habit, ...week, amount: week.amount + partial, days: week.days + (partial ? 1 : 0) };
+  }).filter(row => isAmountHabit(row.habit) || formatMeasures(row.totals));
+  if (!rows.length) return null;
   return <View style={s.card}>
     <Text style={[s.title, { marginBottom: 6 }]}>Son 7 gün</Text>
-    {tracked.map(habit => {
-      const { days, totals } = weeklyTotals(habit, entries);
-      const { target, unit } = habitGoal(habit);
-      const summary = target > 1 ? `${target} ${unit} hedefi: ${days}/7 gün` : formatMeasures(totals);
-      return <View key={habit.id} style={s.streakRow} accessibilityLabel={`${habit.title}: ${days ? summary || `${days} gün` : 'bu hafta yok'}`}>
+    {rows.map(({ habit, days, amount, totals }) => {
+      const parts = [amount ? `${formatAmount(amount)} ${habitGoal(habit).unit}` : '', formatMeasures(totals)].filter(Boolean).join(' · ');
+      return <View key={habit.id} style={s.streakRow} accessibilityLabel={`${habit.title}: ${days ? `${parts || 'miktar yok'}, ${days} gün` : 'bu hafta yok'}`}>
         <Text style={s.icon}>{habit.icon}</Text>
         <View style={{ flex: 1 }}>
           <Text style={s.habitTitle} numberOfLines={1}>{habit.title}</Text>
-          <Text style={[s.weekTotal, !days && { color: '#9AA6A8' }]}>{days ? summary || 'Ölçü girilmedi' : 'Bu hafta henüz yok'}</Text>
+          <Text style={[s.weekTotal, !days && { color: '#9AA6A8' }]}>{days ? parts || 'Miktar girilmedi' : 'Bu hafta henüz yok'}</Text>
         </View>
-        {target > 1 ? null : <Text style={[s.streakCount, !days && { opacity: 0.4 }]}>{days} gün</Text>}
+        <Text style={[s.streakCount, !days && { opacity: 0.4 }]}>{days} gün</Text>
       </View>;
     })}
-    <Text style={s.note}>Bugün dahil son 7 gün. Ölçüler rutine tik atarken girilenlerdir.</Text>
+    <Text style={s.note}>Bugün dahil son 7 gün.</Text>
   </View>;
 }
 
@@ -419,4 +387,12 @@ const s = StyleSheet.create({
   dayToday: { borderWidth: 2, borderColor: gold, backgroundColor: 'white' },
   streakCount: { color: '#8B5B00', fontSize: 15, fontWeight: '800' },
   weekTotal: { color: teal, fontSize: 14, fontWeight: '800', marginTop: 3 },
+  amountTrack: { height: 5, borderRadius: 3, backgroundColor: '#E2E9E4', overflow: 'hidden', marginTop: 6 },
+  amountFill: { height: 5, backgroundColor: gold },
+  quick: { height: 42, minWidth: 46, borderRadius: 10, borderWidth: 1, borderColor: '#BEDDD1', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  quickText: { color: teal, fontSize: 14, fontWeight: '800' },
+  targetInput: { flex: 0, width: 82 },
+  help: { color: '#657482', fontSize: 11, lineHeight: 16, marginTop: 8 },
+  formActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16, marginTop: 10 },
+  skillLine: { marginTop: 8, paddingLeft: 4, paddingVertical: 4 },
 });
