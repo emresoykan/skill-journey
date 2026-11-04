@@ -9,6 +9,15 @@ export const level = (xp: number) => Math.floor(xp / LEVEL_XP) + 1;
 export const entryXp = (entry: Entry) => entry.xp + (entry.bonusXp ?? 0);
 export const totalXpOf = (entries: Entry[]) => entries.reduce((sum, entry) => sum + entryXp(entry), 0);
 
+// Sayıya Türkçe yönelme eki: 2'ye, 3'e, 6'ya, 9'a, 10'a, 20'ye, 100'e. Eki sayının okunuşundaki son ünlü belirler.
+const ONES = ['', 'e', 'ye', 'e', 'e', 'e', 'ya', 'ye', 'e', 'a'];
+const TENS = ['', 'a', 'ye', 'a', 'a', 'ye', 'a', 'e', 'e', 'a'];
+export function toNumber(n: number): string {
+  const value = Math.abs(Math.trunc(n));
+  const suffix = value % 10 ? ONES[value % 10] : value % 100 ? TENS[(value % 100) / 10] : value === 0 ? 'a' : 'e';
+  return `${n}'${suffix}`;
+}
+
 export type Rank = { from: number; title: string; icon: string };
 const ranks: Rank[] = [
   { from: 1, title: 'Çaylak', icon: '🌱' },

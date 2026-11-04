@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { toNumber } from './game';
 import { buildSkillTree, nodeEvidence, type DomainKey, type TreeNode } from './skillTree';
 import type { Entry } from './storage';
 import { useReducedMotion } from './useReducedMotion';
@@ -66,7 +67,7 @@ function Branch({ node, depth, last, entries, open, onToggle }: BranchProps) {
         {node.discovered ? <>
           <Text style={s.meta}>{`${node.totalXp} XP · ${node.count} kayıt${node.children.length && node.ownXp !== node.totalXp ? ` · kendisi ${node.ownXp} XP` : ''}`}</Text>
           <View style={s.nodeTrack}><View style={[s.nodeFill, { width: `${node.progress * 100}%` }]} /></View>
-          <Text style={s.next}>{`Seviye ${node.level + 1}'e ${node.toNext} XP`}</Text>
+          <Text style={s.next}>{`Seviye ${toNumber(node.level + 1)} ${node.toNext} XP`}</Text>
         </> : <Text style={s.meta}>Henüz keşfedilmedi</Text>}
       </View>
     </Pressable>
