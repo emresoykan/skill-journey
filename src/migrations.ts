@@ -2,7 +2,7 @@
 // değişen anahtarları döner. Kural: göç hiçbir öğeyi silmez; tanımadığı ya da okuyamadığı veriye dokunmaz
 // (okunamayan veri yüklemede karantinaya ayrılır). Çalışmadan önce etkilenen anahtarların kopyası alınır
 // (bkz. storage.ts → runMigrations).
-import { renameLegacyHabit } from './routines';
+import { LEGACY_HABIT_SETTINGS, normalizeTitle, renameLegacyHabit } from './routines';
 
 export type StoredValues = Record<string, string | null>;
 export type Migration = { version: number; title: string; keys: string[]; run: (data: StoredValues) => StoredValues };
@@ -49,6 +49,27 @@ export const migrations: Migration[] = [
         if (changed) changes[HABITS] = JSON.stringify(renamed);
       }
       return changes;
+    },
+  },
+  {
+    version: 2,
+    // Hazır öneriler kaldırıldı. Öneriden eklenmiş rutinin birimi ve hedefi o öneriden okunuyordu;
+    // bunlar rutinin kendisine yazılır ki rutin aynı çalışmaya devam etsin ("Su iç" → 8 bardak).
+    // Birimi zaten olan rutine dokunulmaz.
+    title: 'Hazır öneri ayarlarını rutinlerin kendisine yaz',
+    keys: [HABITS],
+    run(data): StoredValues {
+      const habits = readArray(data[HABITS]);
+      if (!habits) return {};
+      let changed = false;
+      const updated = habits.map(habit => {
+        if (!isRecord(habit) || typeof habit.title !== 'string' || (typeof habit.unit === 'string' && habit.unit.trim())) return habit;
+        const legacy = LEGACY_HABIT_SETTINGS[normalizeTitle(renameLegacyHabit({ title: habit.title }).title)];
+        if (!legacy) return habit;
+        changed = true;
+        return { ...habit, unit: legacy.unit, ...(legacy.target && !habit.target ? { target: legacy.target } : {}) };
+      });
+      return changed ? { [HABITS]: JSON.stringify(updated) } : {};
     },
   },
 ];

@@ -3,31 +3,28 @@ import { addDaysToKey, dayKey as localDay, entryDay, isValidDate } from './dates
 import type { Analysis } from './skillEngine';
 import type { Entry } from './storage';
 
-// target: günde kaç kez (ör. 8 bardak su); yoksa tek tik. unit: sayının birimi ("bardak").
-// measures: tik atarken sorulan ölçüler (ör. yürüyüşte adım ve süre). goalMinutes: süre ölçülü rutinde günlük süre hedefi.
+// Rutinleri kullanıcı kendisi tanımlar. unit varsa rutin miktarlıdır: her gün ne kadar yapıldığı girilir
+// ("İngilizce · 20 kelime"); target, isteğe bağlı günlük hedeftir. unit yoksa rutin tek tikle yapılır.
+// measures ve goalMinutes eski sürümün sabit ölçüleridir (adım/süre/sayfa); artık sorulmaz, eski kayıtlarda görünür.
 export type Measure = 'steps' | 'duration' | 'pages';
 export type MeasureValues = Partial<Record<Measure, number>>;
 export type Habit = { id: string; title: string; icon: string; skill: string; createdAt: string; target?: number; unit?: string; measures?: Measure[]; goalMinutes?: number };
-// aliases: önerinin eski adları; o adla eklenmiş rutinler de bu öneri sayılır.
-export type HabitPreset = Pick<Habit, 'title' | 'icon' | 'skill' | 'target' | 'unit' | 'measures'> & { aliases?: string[] };
 
 export const HABIT_XP = 10;
 export const MAX_HABITS = 12;
-export const MAX_TARGET = 20;
-// Süre hedefi 15 dakikalık adımlarla, en fazla 10 saat.
-export const GOAL_STEP_MINUTES = 15;
-export const MAX_GOAL_MINUTES = 600;
+// Günlük miktar ve hedef için üst sınır; yazım hatasını (fazladan sıfır) yakalar.
+export const MAX_AMOUNT = 100000;
+export const MAX_UNIT_LENGTH = 20;
 
-export const habitPresets: HabitPreset[] = [
-  { icon: '💧', title: 'Su iç', skill: 'Self Care', target: 8, unit: 'bardak' },
-  { icon: '📖', title: 'Kitap okuma', aliases: ['20 dk kitap oku'], skill: 'Learning', measures: ['duration', 'pages'] },
-  { icon: '🚶', title: 'Yürüyüş yap', skill: 'Fitness', measures: ['steps', 'duration'] },
-  { icon: '🧘', title: 'Meditasyon', skill: 'Self Care' },
-  { icon: '🛏️', title: 'Yatağını topla', skill: 'Household' },
-  { icon: '📝', title: 'Günlük yaz', skill: 'Self Awareness' },
-  { icon: '🏋️', title: 'Spor yap', skill: 'Fitness', measures: ['duration'] },
-  { icon: '📵', title: 'Ekransız akşam', skill: 'Self Care' },
-];
+// Eski sürümdeki hazır önerilerin ayarları. Yalnız göç 2 kullanır: bu adlarla eklenmiş, birimi
+// saklanmamış rutinlere birim ve hedef yazılır (bkz. migrations.ts). Yeni rutin önerisi yoktur.
+export const LEGACY_HABIT_SETTINGS: Record<string, { unit: string; target?: number }> = {
+  'su iç': { unit: 'bardak', target: 8 },
+  'kitap okuma': { unit: 'sayfa' },
+  'yürüyüş yap': { unit: 'adım' },
+  'spor yap': { unit: 'dk' },
+};
+const LEGACY_NAMES: Record<string, string> = { '20 dk kitap oku': 'Kitap okuma' };
 
 // Düzenleme modunda rutine seçilebilecek simgeler.
 export const habitIcons = ['⭐', '💧', '📖', '🚶', '🧘', '🛏️', '📝', '🏋️', '📵', '🥗', '💊', '🦷', '☀️', '🌙', '🧹', '🎸', '💻', '🚴', '🙏', '❤️'];
@@ -37,14 +34,10 @@ export const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() +
 const isSameDay = (entry: Entry, now: Date) => entryDay(entry) === localDay(now);
 export const normalizeTitle = (title: string) => title.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
 
-// Rutinin karşılığı olan hazır öneri: adı ya da önerinin eski adlarından biri eşleşir.
-export const presetFor = (title: string) => habitPresets.find(preset =>
-  [preset.title, ...(preset.aliases ?? [])].some(name => normalizeTitle(name) === normalizeTitle(title)));
-
-// Önerinin eski adıyla eklenmiş rutini yeni ada taşır ("20 dk kitap oku" → "Kitap okuma").
+// Eski hazır önerinin eski adıyla eklenmiş rutini yeni ada taşır ("20 dk kitap oku" → "Kitap okuma").
 export function renameLegacyHabit<T extends { title: string }>(habit: T): T {
-  const preset = presetFor(habit.title);
-  return preset && normalizeTitle(preset.title) !== normalizeTitle(habit.title) ? { ...habit, title: preset.title } : habit;
+  const name = LEGACY_NAMES[normalizeTitle(habit.title)];
+  return name ? { ...habit, title: name } : habit;
 }
 
 // Rutine tik atmak, habitId taşıyan sıradan bir kayıt oluşturur; böylece XP, seri,
@@ -79,23 +72,26 @@ export function habitTitleError(title: string, habits: Habit[]): string | null {
   return null;
 }
 
-// Günlük hedef: rutinin kendi hedefi; yoksa aynı adlı hazır önerininki (hedef eklenmeden önce eklenmiş "Su iç" de
-// 8 bardak sayılır); o da yoksa tek tik.
-export function habitGoal(habit: Habit): { target: number; unit: string } {
-  const preset = presetFor(habit.title);
-  return { target: habit.target ?? preset?.target ?? 1, unit: habit.unit ?? preset?.unit ?? 'kez' };
+export const isAmountHabit = (habit: Habit) => !!habit.unit?.trim();
+// Rutin bugün ne zaman "yapıldı" sayılır: miktarlı rutinde hedefe (hedef yoksa ilk girişe) ulaşınca, tik rutininde tikle.
+export function habitGoal(habit: Habit): { target: number; unit: string; hasTarget: boolean } {
+  const hasTarget = isAmountHabit(habit) && Number.isFinite(habit.target) && habit.target! > 0;
+  return { target: hasTarget ? habit.target! : 1, unit: habit.unit?.trim() ?? '', hasTarget };
 }
 
-// Tik atarken sorulan ölçüler: rutinin kendi listesi, yoksa aynı adlı hazır önerininki.
-export function habitMeasures(habit: Habit): Measure[] {
-  return habit.measures ?? presetFor(habit.title)?.measures ?? [];
+export const formatAmount = (value: number) => value.toLocaleString('tr-TR');
+// "İngilizce · 20 kelime": miktarlı rutinin günlük kaydının metni.
+export const amountDescription = (habit: Habit, total: number) => `${habit.title} · ${formatAmount(total)} ${habitGoal(habit).unit}`;
+
+// Rutin ayarlarının (birim, hedef) doğrulaması. Hedef 0 ya da boş: hedef yok.
+export function habitSettingsError(unit: string, target: number | null): string | null {
+  if (unit.trim().length > MAX_UNIT_LENGTH) return `Birim en fazla ${MAX_UNIT_LENGTH} karakter olabilir.`;
+  if (target !== null && (!Number.isInteger(target) || target < 0 || target > MAX_AMOUNT)) return `Hedef 1 ile ${formatAmount(MAX_AMOUNT)} arasında tam sayı olmalı.`;
+  if (target && !unit.trim()) return 'Hedef için bir birim yaz (ör. kelime, sayfa, dk).';
+  return null;
 }
 
-// Süre dakika olarak saklanır. Üst sınırlar yazım hatasını yakalar (ör. fazladan sıfır).
-export const MEASURE_LIMITS: Record<Measure, number> = { steps: 100000, duration: 24 * 60, pages: 2000 };
-export const measureNames: Record<Measure, string> = { steps: 'Adım', duration: 'Süre', pages: 'Sayfa' };
-
-// Yazılan sayıyı çevirir. Boş → null (ölçü girilmedi); geçersiz → NaN.
+// Yazılan sayıyı çevirir. Boş → null (girilmedi); geçersiz → NaN.
 export function parseAmount(text: string, decimals = false): number | null {
   const clean = text.trim().replace(/\s/g, '');
   if (!clean) return null;
@@ -105,24 +101,12 @@ export function parseAmount(text: string, decimals = false): number | null {
   return /^\d+(\.\d+)?$/.test(normalized) && value > 0 ? value : NaN;
 }
 
-// Saat seçilmişse dakikaya çevrilir ("1,5" saat → 90 dk).
-export const toMinutes = (value: number, unit: 'dk' | 'saat') => Math.round(unit === 'saat' ? value * 60 : value);
-
-export function measureError(values: MeasureValues): string | null {
-  for (const measure of Object.keys(values) as Measure[]) {
-    const value = values[measure]!;
-    if (!Number.isFinite(value) || value <= 0) return `${measureNames[measure]} için geçerli bir sayı yaz.`;
-    if (value > MEASURE_LIMITS[measure]) return measure === 'duration' ? 'Süre 24 saatten uzun olamaz.' : `${measureNames[measure]} en fazla ${MEASURE_LIMITS[measure].toLocaleString('tr-TR')} olabilir.`;
-  }
-  return null;
-}
-
 export const formatDuration = (minutes: number) => {
   const hours = Math.floor(minutes / 60), rest = minutes % 60;
   return hours ? `${hours} sa${rest ? ` ${rest} dk` : ''}` : `${minutes} dk`;
 };
 
-// "6.500 adım · 45 dk · 30 sayfa"; sıra her zaman aynıdır.
+// Eski kayıtlardaki sabit ölçüler: "6.500 adım · 45 dk · 30 sayfa"; sıra her zaman aynıdır.
 export function formatMeasures(values: MeasureValues | undefined): string {
   if (!values) return '';
   return [
@@ -132,37 +116,40 @@ export function formatMeasures(values: MeasureValues | undefined): string {
   ].filter(Boolean).join(' · ');
 }
 
-// Son 7 gün (bugün dahil): rutinin kaç gün yapıldığı ve girilen ölçülerin toplamı.
-// Sayılı rutinde (su) gün, hedefe ulaşılan gündür; günlük sayılar saklanmadığı için toplam bardak yoktur.
+// Son 7 gün (bugün dahil): rutinin kaç gün yapıldığı, girilen miktarların toplamı (rutinin şimdiki birimiyle
+// girilmiş olanlar) ve eski kayıtlardaki sabit ölçülerin toplamı.
 export function weeklyTotals(habit: Habit, entries: Entry[], now = new Date()) {
   const today = localDay(now);
   const start = addDaysToKey(today, -6);
   const days = new Set<string>();
   const totals: MeasureValues = {};
+  const unit = habitGoal(habit).unit;
+  let amount = 0;
   for (const entry of entries) {
     if (entry.habitId !== habit.id || !isValidDate(entry.createdAt)) continue;
     const day = entryDay(entry);
     if (day < start || day > today) continue;
     days.add(day);
+    if (entry.amount && entry.amount.unit === unit) amount += entry.amount.value;
     for (const measure of ['steps', 'duration', 'pages'] as Measure[]) {
       const value = entry.measures?.[measure];
       if (value) totals[measure] = (totals[measure] ?? 0) + value;
     }
   }
-  return { days: days.size, totals };
+  return { days: days.size, amount, totals };
 }
 
-// Sayılı rutinlerin bugünkü sayısı. Yalnız bugünün sayısı geçerlidir; ertesi gün sıfırdan başlar.
-// Bugün tamamlanmış (kaydı olan) rutin, sayı daha az görünse de hedefte sayılır.
+// Miktarlı rutinin bugünkü toplamı (habit-counts'ta saklanır; ertesi gün sıfırdan başlar).
+// Bugünkü kaydı olup sayısı saklanmamış rutin (eski sürüm) kayıttaki miktarla, o da yoksa hedefle sayılır.
 export type HabitCounts = Record<string, { day: string; count: number }>;
-export function habitCountToday(counts: HabitCounts, habit: Habit, done: boolean, now = new Date()) {
-  const { target } = habitGoal(habit);
+export function habitCountToday(counts: HabitCounts, habit: Habit, doneEntry?: Entry, now = new Date()) {
   const stored = counts[habit.id]?.day === dayKey(now) ? counts[habit.id].count : 0;
-  return Math.min(target, done ? Math.max(stored, target) : stored);
+  if (!doneEntry) return stored;
+  return Math.max(stored, doneEntry.amount?.value ?? habitGoal(habit).target);
 }
 
-export const availablePresets = (habits: Habit[]) =>
-  habitPresets.filter(preset => !habits.some(habit => presetFor(habit.title) === preset));
+// Yeni toplamla rutinin bugünkü durumu: yapıldı mı (kayıt olmalı mı)?
+export const amountReached = (habit: Habit, total: number) => total > 0 && total >= habitGoal(habit).target;
 
 // Günlük rutin hatırlatıcısı. Bildirimler önümüzdeki günler için tek tek kurulur;
 // böylece o günün rutinleri tamamsa o günün hatırlatması hiç gelmez.

@@ -43,3 +43,28 @@ test('sürüm bilgisi ve bekleyen göçler', () => {
   // Sürümler sıralı ve tekil.
   migrations.forEach((m, i) => assert.equal(m.version, i + 1));
 });
+
+const v2 = migrations.find(m => m.version === 2);
+
+test('göç 2: hazır öneriden eklenmiş rutinlere birim ve hedef yazılır', () => {
+  const habits = [
+    { id: 'w', title: 'Su iç', icon: '💧', skill: 'Self Care', createdAt: 'x' },
+    { id: 'w2', title: 'Su iç', icon: '💧', skill: 'Self Care', createdAt: 'x', target: 6, unit: 'bardak' },
+    { id: 'k', title: '20 dk kitap oku', icon: '📖', skill: 'Learning', createdAt: 'x' },
+    { id: 'y', title: 'Yürüyüş yap', icon: '🚶', skill: 'Fitness', createdAt: 'x', measures: ['steps', 'duration'] },
+    { id: 'm', title: 'Meditasyon', icon: '🧘', skill: 'Self Care', createdAt: 'x' },
+    { id: 'o', title: 'İngilizce', icon: '⭐', skill: 'Languages', createdAt: 'x', unit: 'kelime', target: 20 },
+    'tanımsız',
+  ];
+  const out = JSON.parse(v2.run({ [HABITS]: JSON.stringify(habits) })[HABITS]);
+  assert.equal(out.length, habits.length, 'hiçbir öğe silinmez');
+  assert.deepEqual([out[0].unit, out[0].target], ['bardak', 8]);
+  assert.deepEqual([out[1].unit, out[1].target], ['bardak', 6], 'kendi hedefi korunur');
+  assert.equal(out[2].unit, 'sayfa');
+  assert.equal(out[3].unit, 'adım');
+  assert.deepEqual(out[3].measures, ['steps', 'duration'], 'eski alanlar silinmez');
+  assert.deepEqual(out[4], habits[4], 'tik rutini olduğu gibi');
+  assert.deepEqual(out[5], habits[5]);
+  assert.equal(out[6], 'tanımsız');
+  assert.deepEqual(v2.run({ [HABITS]: JSON.stringify(out) }), {}, 'tekrarlanabilir');
+});

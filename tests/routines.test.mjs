@@ -1,7 +1,7 @@
 // Günlük rutinlerin tik, ilerleme ve ad doğrulama kurallarını sabitler.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { availablePresets, renameLegacyHabit, presetFor, dayKey, formatMeasures, formatTime, habitMeasures, measureError, parseAmount, toMinutes, weeklyTotals, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitPresets, habitTitleError, HABIT_XP, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
+import { amountDescription, amountReached, renameLegacyHabit, dayKey, formatMeasures, formatTime, habitSettingsError, isAmountHabit, parseAmount, weeklyTotals, habitAnalysis, habitCountToday, habitEntriesToday, habitGoal, habitTitleError, HABIT_XP, MAX_AMOUNT, MAX_HABITS, reminderPlan, routinesProgress } from '../src/routines.ts';
 
 const now = new Date(2026, 9, 21, 15, 0);
 const yesterday = new Date(2026, 9, 20, 9, 0);
@@ -51,11 +51,6 @@ test('rutin adı doğrulanır', () => {
   assert.match(habitTitleError('Yeni', full), /En fazla/);
 });
 
-test('eklenmiş hazır öneriler listeden çıkar', () => {
-  const left = availablePresets([habit('h1', 'Su iç')]);
-  assert.equal(left.length, habitPresets.length - 1);
-  assert.ok(!left.some(preset => preset.title === 'Su iç'));
-});
 
 const on = { enabled: true, hour: 20, minute: 0 };
 
@@ -89,68 +84,63 @@ test('saat iki haneli biçimlenir', () => {
   assert.equal(formatTime(20, 0), '20:00');
 });
 
-test('günlük hedef: rutinin kendi hedefi, yoksa aynı adlı hazır öneri, o da yoksa tek tik', () => {
-  assert.deepEqual(habitGoal({ ...habit('h1', 'Su iç'), target: 5, unit: 'bardak' }), { target: 5, unit: 'bardak' });
-  assert.deepEqual(habitGoal(habit('h1', '  su İÇ ')), { target: 8, unit: 'bardak' });
-  assert.deepEqual(habitGoal(habit('h1', 'Yürüyüş yap')), { target: 1, unit: 'kez' });
+test('rutin türü: birimi olan miktarlı, olmayan tek tik', () => {
+  assert.equal(isAmountHabit({ ...habit('h1', 'İngilizce'), unit: 'kelime' }), true);
+  assert.equal(isAmountHabit({ ...habit('h1', 'Meditasyon'), unit: '  ' }), false);
+  assert.equal(isAmountHabit(habit('h1', 'Su iç')), false, 'hazır öneriye bakılmaz; ayar rutinin kendisinde');
 });
 
-test('sayılı rutinde yalnız bugünün sayısı geçerli', () => {
-  const water = { ...habit('h1', 'Su iç'), target: 8, unit: 'bardak' };
-  assert.equal(habitCountToday({ h1: { day: dayKey(now), count: 3 } }, water, false, now), 3);
-  assert.equal(habitCountToday({ h1: { day: dayKey(yesterday), count: 6 } }, water, false, now), 0);
-  assert.equal(habitCountToday({}, water, false, now), 0);
+test('günlük hedef: yalnız miktarlı rutinde; yoksa ilk giriş yeter', () => {
+  assert.deepEqual(habitGoal({ ...habit('h1'), unit: 'kelime', target: 20 }), { target: 20, unit: 'kelime', hasTarget: true });
+  assert.deepEqual(habitGoal({ ...habit('h1'), unit: 'kelime' }), { target: 1, unit: 'kelime', hasTarget: false });
+  assert.deepEqual(habitGoal({ ...habit('h1'), target: 5 }), { target: 1, unit: '', hasTarget: false }, 'birimsiz hedef sayılmaz');
 });
 
-test('bugün tamamlanmış sayılı rutin hedefte görünür, hedefi aşmaz', () => {
-  const water = { ...habit('h1', 'Su iç'), target: 8, unit: 'bardak' };
-  assert.equal(habitCountToday({}, water, true, now), 8);
-  assert.equal(habitCountToday({ h1: { day: dayKey(now), count: 12 } }, water, false, now), 8);
+test('hedefe ulaşma ve kayıt metni', () => {
+  const english = { ...habit('h1', 'İngilizce'), unit: 'kelime', target: 20 };
+  assert.equal(amountReached(english, 19), false);
+  assert.equal(amountReached(english, 20), true);
+  assert.equal(amountReached(english, 35), true, 'hedefi aşmak serbest');
+  assert.equal(amountReached({ ...english, target: undefined }, 1), true);
+  assert.equal(amountReached({ ...english, target: undefined }, 0), false);
+  assert.equal(amountDescription(english, 1250), 'İngilizce · 1.250 kelime');
 });
 
-test('ölçüler: hazır öneriden gelir, kendi yazdığın rutinde yoktur', () => {
-  assert.deepEqual(habitMeasures(habit('h1', 'Yürüyüş yap')), ['steps', 'duration']);
-  assert.deepEqual(habitMeasures(habit('h1', '20 dk kitap oku')), ['duration', 'pages']);
-  assert.deepEqual(habitMeasures(habit('h1', 'Spor yap')), ['duration']);
-  assert.deepEqual(habitMeasures(habit('h1', 'Bitki sula')), []);
+test('bugünkü miktar: yalnız bugünün sayısı; eski sürümde tamamlanmış rutin kayıttaki miktarla', () => {
+  const english = { ...habit('h1', 'İngilizce'), unit: 'kelime', target: 20 };
+  assert.equal(habitCountToday({ h1: { day: dayKey(now), count: 35 } }, english, undefined, now), 35);
+  assert.equal(habitCountToday({ h1: { day: dayKey(yesterday), count: 6 } }, english, undefined, now), 0);
+  assert.equal(habitCountToday({}, english, { ...entry('a', 'h1'), amount: { value: 25, unit: 'kelime' } }, now), 25);
+  assert.equal(habitCountToday({}, { ...habit('w', 'Su iç'), unit: 'bardak', target: 8 }, entry('b', 'w'), now), 8);
 });
 
-test('kitap okuma: yeni ad, eski adla eklenmiş rutin de tanınır ve yeni ada taşınır', () => {
-  assert.equal(presetFor('Kitap okuma')?.title, 'Kitap okuma');
-  assert.equal(presetFor('20 dk kitap oku')?.title, 'Kitap okuma');
-  assert.deepEqual(habitMeasures(habit('h1', 'Kitap okuma')), ['duration', 'pages']);
+test('rutin ayarları doğrulanır', () => {
+  assert.equal(habitSettingsError('kelime', 20), null);
+  assert.equal(habitSettingsError('', null), null);
+  assert.match(habitSettingsError('', 20), /birim/);
+  assert.match(habitSettingsError('kelime', 2.5), /tam sayı/);
+  assert.match(habitSettingsError('kelime', MAX_AMOUNT + 1), /arasında/);
+  assert.match(habitSettingsError('x'.repeat(21), null), /en fazla 20/);
+});
+
+test('eski ad yeni ada taşınır, kullanıcının adı değişmez', () => {
   const legacy = habit('h1', '20 dk kitap oku');
   assert.equal(renameLegacyHabit(legacy).title, 'Kitap okuma');
   assert.equal(renameLegacyHabit(legacy).id, 'h1');
-  // Kullanıcının kendi verdiği ad değişmez.
   assert.equal(renameLegacyHabit(habit('h2', '30 dk roman oku')).title, '30 dk roman oku');
-  // Eski adlı rutin varken "Kitap okuma" önerisi tekrar çıkmaz.
-  assert.ok(!availablePresets([legacy]).some(preset => preset.title === 'Kitap okuma'));
 });
 
-test('sayı okuma: binlik ayırıcı, saatte ondalık, boş ve geçersiz', () => {
+test('yazılan sayı çevrilir', () => {
   assert.equal(parseAmount('6.500'), 6500);
-  assert.equal(parseAmount(' 6500 '), 6500);
+  assert.equal(parseAmount(' 20 '), 20);
   assert.equal(parseAmount(''), null);
   assert.ok(Number.isNaN(parseAmount('abc')));
   assert.ok(Number.isNaN(parseAmount('0')));
-  assert.equal(parseAmount('1,5', true), 1.5);
-  assert.equal(parseAmount('1.5', true), 1.5);
-  assert.equal(toMinutes(1.5, 'saat'), 90);
-  assert.equal(toMinutes(45, 'dk'), 45);
 });
 
-test('ölçü sınırları yazım hatasını yakalar', () => {
-  assert.equal(measureError({ steps: 6500, duration: 45 }), null);
-  assert.match(measureError({ duration: 25 * 60 }), /24 saat/);
-  assert.match(measureError({ steps: 250000 }), /Adım en fazla 100\.000/);
-  assert.match(measureError({ pages: NaN }), /Sayfa için geçerli/);
-});
-
-test('ölçüler okunur biçimde yazılır', () => {
+test('eski kayıtlardaki ölçüler okunur biçimde yazılır', () => {
   assert.equal(formatMeasures({ steps: 6500, duration: 45 }), '6.500 adım · 45 dk');
   assert.equal(formatMeasures({ pages: 30, duration: 90 }), '1 sa 30 dk · 30 sayfa');
-  assert.equal(formatMeasures({ duration: 120 }), '2 sa');
   assert.equal(formatMeasures(undefined), '');
 });
 
@@ -167,6 +157,14 @@ test('haftalık toplam: son 7 gün, yalnız o rutin, gün sayısı tekil', () =>
     log('f', 1, { steps: 5000 }, 'baska'),
     log('g', 2, undefined),
   ];
-  assert.deepEqual(weeklyTotals(walk, entries, now), { days: 4, totals: { steps: 15000, duration: 135 } });
-  assert.deepEqual(weeklyTotals(habit('x'), entries, now), { days: 0, totals: {} });
+  assert.deepEqual(weeklyTotals(walk, entries, now), { days: 4, amount: 0, totals: { steps: 15000, duration: 135 } });
+  assert.deepEqual(weeklyTotals(habit('x'), entries, now), { days: 0, amount: 0, totals: {} });
+});
+
+test('haftalık toplam: miktarlı rutinde girilen miktarlar toplanır (aynı birimle)', () => {
+  const english = { ...habit('en', 'İngilizce'), unit: 'kelime' };
+  const day = n => new Date(2026, 9, 21 - n, 10, 0);
+  const log = (id, n, value, unit = 'kelime') => ({ ...entry(id, 'en', day(n)), amount: { value, unit } });
+  const entries = [log('a', 0, 20), log('b', 2, 15), log('c', 5, 50), log('d', 8, 99), log('e', 1, 3, 'sayfa')];
+  assert.deepEqual(weeklyTotals(english, entries, now), { days: 4, amount: 85, totals: {} });
 });

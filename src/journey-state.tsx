@@ -4,7 +4,7 @@ import { analyzeExperience, displaySkill, isNearDuplicate, isWithin, type Analys
 import { loadBadges, loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, runMigrations, saveBadges, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, StorageConflictError, type EarnedBadges, type Entry } from './storage';
 import { cleanTodoTitle, todoTitleError, visibleTodos, type Todo } from './todos';
 import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
-import { dayKey, DEFAULT_REMINDER, formatMeasures, habitAnalysis, habitCountToday, habitGoal, habitPresets, habitTitleError, MAX_GOAL_MINUTES, MAX_TARGET, normalizeTitle, routinesProgress, type Habit, type HabitCounts, type HabitPreset, type MeasureValues, type ReminderSettings } from './routines';
+import { amountDescription, amountReached, dayKey, DEFAULT_REMINDER, formatAmount, habitAnalysis, habitCountToday, habitGoal, habitSettingsError, habitTitleError, isAmountHabit, MAX_AMOUNT, routinesProgress, type Habit, type HabitCounts, type ReminderSettings } from './routines';
 import { ensureReminderPermission, loadReminder, remindersSupported, saveReminder, sendTestReminder, syncReminders } from './reminders';
 import { capAwards, correctSkillAward, removeSkillAward } from './skillCorrections';
 import { entryDay, dayKey as localDay } from './dates';
@@ -57,21 +57,24 @@ function useJourneyState() {
   const badgesSynced = useRef(false);
   // Veri bu arada başka bir sekmede değiştiyse yazma reddedilir (StorageConflictError): güncel hal
   // yeniden okunur ve kullanıcıdan işlemi tekrarlaması istenir.
-  const guarded = <T,>(store: Store, save: (value: T) => Promise<void>) => (value: T) =>
-    !ready.current.has(store) ? Promise.reject(new Error(`${store} yüklenmeden yazılamaz`))
-      : save(value).catch(cause => {
-        if (cause instanceof StorageConflictError) {
-          setSyncNotice('Veriler başka bir sekmede değişmişti; güncel hali yüklendi. Son işlemi tekrar dene.');
-          reload.current();
-        }
-        throw cause;
-      });
-  const persistEntries = guarded('entries', saveEntries);
-  const persistHabits = guarded('habits', saveHabits);
-  const persistHabitCounts = guarded('habitCounts', saveHabitCounts);
-  const persistReviews = guarded('reviews', saveReviews);
-  const persistTodos = guarded('todos', saveTodos);
-  const persistBadges = guarded('badges', saveBadges);
+  async function guardedSave<T>(store: Store, save: (value: T) => Promise<void>, value: T) {
+    if (!ready.current.has(store)) throw new Error(`${store} yüklenmeden yazılamaz`);
+    try {
+      await save(value);
+    } catch (cause) {
+      if (cause instanceof StorageConflictError) {
+        setSyncNotice('Veriler başka bir sekmede değişmişti; güncel hali yüklendi. Son işlemi tekrar dene.');
+        reload.current();
+      }
+      throw cause;
+    }
+  }
+  const persistEntries = (value: Entry[]) => guardedSave('entries', saveEntries, value);
+  const persistHabits = (value: Habit[]) => guardedSave('habits', saveHabits, value);
+  const persistHabitCounts = (value: HabitCounts) => guardedSave('habitCounts', saveHabitCounts, value);
+  const persistReviews = (value: Reviews) => guardedSave('reviews', saveReviews, value);
+  const persistTodos = (value: Todo[]) => guardedSave('todos', saveTodos, value);
+  const persistBadges = (value: EarnedBadges) => guardedSave('badges', saveBadges, value);
   const totalXp = totalXpOf(entries);
   const quest = dailyQuest();
   const questDone = questDoneToday(entries);
@@ -145,7 +148,7 @@ function useJourneyState() {
 
   // Elle yazılan kayıt, rutin tiki, öğrenilen kavram ve tekrar oturumu buradan geçer:
   // aynı XP, seri, hedef ve rozet hesabı. Oluşan kaydın kimliğini döner.
-  async function recordEntry(description: string, result: Analysis, extra: Pick<Entry, 'habitId' | 'measures' | 'learning' | 'review'> = {}) {
+  async function recordEntry(description: string, result: Analysis, extra: Pick<Entry, 'habitId' | 'measures' | 'learning' | 'review' | 'amount'> = {}) {
     const knownSkills = new Set(entries.flatMap(entry => entry.awards.map(award => award.skill)));
     const previousSkillXp = entries.flatMap(entry => entry.awards).reduce<Record<string, number>>((totals, award) => {
       totals[award.skill] = (totals[award.skill] ?? 0) + award.xp;
@@ -252,11 +255,10 @@ function useJourneyState() {
     finally { setBusy(false); setAnalyzing(false); }
   }
 
-  // Rutine dokununca tik atılır (kayıt oluşur) ya da tik kaldırılır (bugünkü kaydı silinir).
-  // Sayılı rutinde (ör. 8 bardak su) her dokunuş bir artırır; tik hedefe ulaşınca atılır.
+  // Tik rutinine dokununca tik atılır (kayıt oluşur) ya da kaldırılır (bugünkü kaydı silinir).
+  // Miktarlı rutin tikle değil, girilen miktarla güncellenir (setHabitAmount).
   async function toggleHabit(habit: Habit) {
-    if (habitGoal(habit).target > 1) return stepHabit(habit, 1);
-    if (busy) return;
+    if (isAmountHabit(habit) || busy) return;
     setBusy(true);
     setHabitError('');
     setReward(null);
@@ -278,81 +280,62 @@ function useJourneyState() {
     }
   }
 
-  // Ölçülü rutin (ör. yürüyüşte adım ve süre): ölçülerle tik atılır; bugün zaten tikliyse ölçüler güncellenir
-  // (XP değişmez). Ölçüler kayıt metnine de yazılır, Anılar'da görünür.
-  async function logHabit(habit: Habit, measures: MeasureValues): Promise<boolean> {
+  // Bugünkü kayıt, miktarlı rutinin yeni toplamına göre: hedefe (hedef yoksa ilk girişe) ulaşınca oluşur (XP),
+  // sonra toplam değiştikçe metni ve miktarı güncellenir (XP değişmez), hedefin altına inince silinir.
+  async function syncAmountEntry(habit: Habit, total: number, done: Entry | undefined) {
+    const reached = amountReached(habit, total);
+    const description = amountDescription(habit, total);
+    const amount = { value: total, unit: habitGoal(habit).unit };
+    if (reached && !done) { await recordEntry(description, habitAnalysis(habit), { habitId: habit.id, amount }); return; }
+    if (done) {
+      const updated = reached
+        ? entries.map(entry => entry.id === done.id ? { ...entry, description, amount } : entry)
+        : entries.filter(entry => entry.id !== done.id);
+      await persistEntries(updated);
+      setEntries(updated);
+    }
+    tap();
+  }
+
+  // Miktarlı rutinin bugünkü toplamını ayarlar ("İngilizce · 20 kelime"). Ekleme de düzeltme de bununla yapılır.
+  async function setHabitAmount(habit: Habit, total: number): Promise<boolean> {
     if (busy) return false;
+    if (!Number.isInteger(total) || total < 0 || total > MAX_AMOUNT) {
+      setHabitError(`Miktar 0 ile ${formatAmount(MAX_AMOUNT)} arasında tam sayı olmalı.`);
+      return false;
+    }
     setBusy(true);
     setHabitError('');
     setReward(null);
     setEditNotice(null);
     try {
-      const summary = formatMeasures(measures);
-      const description = summary ? `${habit.title} · ${summary}` : habit.title;
-      const extra = Object.keys(measures).length ? { measures } : {};
-      const done = routines.done.get(habit.id);
-      if (done) {
-        const updated = entries.map(entry => entry.id === done.id ? { ...entry, description, measures: extra.measures } : entry);
-        await persistEntries(updated);
-        setEntries(updated);
-        tap();
-      } else {
-        await recordEntry(description, habitAnalysis(habit), { habitId: habit.id, ...extra });
-      }
+      const counts = { ...habitCounts, [habit.id]: { day: dayKey(new Date()), count: total } };
+      await persistHabitCounts(counts);
+      setHabitCounts(counts);
+      await syncAmountEntry(habit, total, routines.done.get(habit.id));
       return true;
     } catch {
-      setHabitError('Rutin kaydedilemedi. Lütfen tekrar dene.');
+      setHabitError('Rutin güncellenemedi. Lütfen tekrar dene.');
       return false;
     } finally {
       setBusy(false);
     }
   }
+  const habitCount = (habit: Habit) => habitCountToday(habitCounts, habit, routines.done.get(habit.id));
 
-  // Sayılı rutinin bugünkü sayısını bir artırır ya da azaltır. Hedefe ulaşınca kayıt (XP) oluşur;
-  // hedefin altına inince bugünkü kayıt silinir.
-  async function stepHabit(habit: Habit, delta: 1 | -1) {
-    if (busy) return;
-    const { target } = habitGoal(habit);
-    const done = routines.done.get(habit.id);
-    const count = habitCountToday(habitCounts, habit, !!done);
-    const next = Math.max(0, Math.min(target, count + delta));
-    if (next === count) return;
-    setBusy(true);
-    setHabitError('');
-    setReward(null);
-    setEditNotice(null);
-    try {
-      const counts = { ...habitCounts, [habit.id]: { day: dayKey(new Date()), count: next } };
-      await persistHabitCounts(counts);
-      setHabitCounts(counts);
-      if (next >= target && !done) await recordEntry(habit.title, habitAnalysis(habit), { habitId: habit.id });
-      else {
-        if (next < target && done) {
-          const updated = entries.filter(entry => entry.id !== done.id);
-          await persistEntries(updated);
-          setEntries(updated);
-        }
-        tap();
-      }
-    } catch {
-      setHabitError('Rutin güncellenemedi. Lütfen tekrar dene.');
-    } finally {
-      setBusy(false);
-    }
-  }
-  const habitCount = (habit: Habit) => habitCountToday(habitCounts, habit, routines.done.has(habit.id));
-
-  async function addHabit(title: string, preset?: HabitPreset): Promise<boolean> {
+  // Rutini kullanıcı tanımlar: ad, isteğe bağlı birim ("kelime") ve günlük hedef. Beceri adından çıkarılır.
+  async function addHabit(title: string, settings: { unit?: string; target?: number | null } = {}): Promise<boolean> {
     const clean = title.trim().replace(/\s+/g, ' ');
-    const problem = habitTitleError(clean, habits);
+    const unit = settings.unit?.trim().replace(/\s+/g, ' ') ?? '';
+    const target = settings.target || null;
+    const problem = habitTitleError(clean, habits) ?? habitSettingsError(unit, target);
     if (problem) { setHabitError(problem); return false; }
     if (busy) return false;
     setBusy(true);
     setHabitError('');
     try {
-      // Hazır rutinin becerisi bellidir; kendi yazdığın rutinin becerisi adından çıkarılır.
-      const skill = preset?.skill ?? (await analyzeExperience(clean)).skill;
-      const habit: Habit = { id: `h-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: clean, icon: preset?.icon ?? '⭐', skill, createdAt: new Date().toISOString(), ...(preset?.target ? { target: preset.target, unit: preset.unit } : {}) };
+      const skill = (await analyzeExperience(clean)).skill;
+      const habit: Habit = { id: `h-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: clean, icon: '⭐', skill, createdAt: new Date().toISOString(), ...(unit ? { unit } : {}), ...(unit && target ? { target } : {}) };
       const updated = [...habits, habit];
       await persistHabits(updated);
       setHabits(updated);
@@ -365,43 +348,30 @@ function useJourneyState() {
     }
   }
 
-  // Ad, simge ya da günlük hedef değişir. Ad değişince beceri yeniden belirlenir: hazır öneriyle aynıysa
-  // onun becerisi, değilse addan çıkarılan beceri. Geçmiş tikler eski adıyla kalır.
-  async function updateHabit(id: string, changes: { title?: string; icon?: string; target?: number; goalMinutes?: number }): Promise<boolean> {
+  // Ad, simge, beceri, birim ya da günlük hedef değişir. Ad değişince (beceri ayrıca seçilmediyse) beceri addan
+  // yeniden çıkarılır. Birim boşaltılırsa rutin tek tikli olur. Geçmiş kayıtlar eski haliyle kalır.
+  async function updateHabit(id: string, changes: { title?: string; icon?: string; skill?: string; unit?: string; target?: number | null }): Promise<boolean> {
     const current = habits.find(habit => habit.id === id);
     if (!current || busy) return false;
     const title = changes.title?.trim().replace(/\s+/g, ' ') ?? current.title;
     const renamed = title !== current.title;
-    if (renamed) {
-      const problem = habitTitleError(title, habits.filter(habit => habit.id !== id));
-      if (problem) { setHabitError(problem); return false; }
-    }
+    const unit = changes.unit === undefined ? current.unit?.trim() ?? '' : changes.unit.trim().replace(/\s+/g, ' ');
+    const target = changes.target === undefined ? current.target ?? null : changes.target || null;
+    const problem = (renamed ? habitTitleError(title, habits.filter(habit => habit.id !== id)) : null) ?? habitSettingsError(unit, unit ? target : null);
+    if (problem) { setHabitError(problem); return false; }
     setBusy(true);
     setHabitError('');
     try {
-      const preset = habitPresets.find(item => normalizeTitle(item.title) === normalizeTitle(title));
-      const skill = !renamed ? current.skill : preset?.skill ?? (await analyzeExperience(title)).skill;
-      // Hedef değişince birim korunur (hazır önerininki dahil: "Su iç" → bardak).
-      const goal = changes.target === undefined ? null : { target: Math.max(1, Math.min(MAX_TARGET, changes.target)), unit: habitGoal(current).unit };
-      // Süre hedefi 0 olunca kalkar.
-      const minutes = changes.goalMinutes === undefined ? null : { goalMinutes: changes.goalMinutes > 0 ? Math.min(MAX_GOAL_MINUTES, changes.goalMinutes) : undefined };
-      const updated = habits.map(habit => habit.id === id ? { ...habit, title, skill, icon: changes.icon ?? habit.icon, ...goal, ...minutes } : habit);
+      const skill = changes.skill ?? (renamed ? (await analyzeExperience(title)).skill : current.skill);
+      const { unit: _unit, target: _target, ...rest } = current;
+      const next: Habit = { ...rest, title, skill, icon: changes.icon ?? current.icon, ...(unit ? { unit } : {}), ...(unit && target ? { target } : {}) };
+      const updated = habits.map(habit => habit.id === id ? next : habit);
       await persistHabits(updated);
       setHabits(updated);
-      // Bugünkü sayı yeni hedefe göre yeniden değerlendirilir: hedef düşüp sayıya inince tik atılır,
-      // hedef sayının üstüne çıkınca bugünkü tik geri alınır.
-      if (goal) {
+      // Miktarlı rutinde bugünkü toplam yeni hedefe ve birime göre yeniden değerlendirilir.
+      if (isAmountHabit(next) && (changes.unit !== undefined || changes.target !== undefined)) {
         const done = routines.done.get(id);
-        const count = habitCountToday(habitCounts, current, !!done);
-        const counts = { ...habitCounts, [id]: { day: dayKey(new Date()), count: Math.min(count, goal.target) } };
-        await persistHabitCounts(counts);
-        setHabitCounts(counts);
-        if (count >= goal.target && !done && count > 0) await recordEntry(title, habitAnalysis({ ...current, skill }), { habitId: id });
-        else if (count < goal.target && done) {
-          const remaining = entries.filter(entry => entry.id !== done.id);
-          await persistEntries(remaining);
-          setEntries(remaining);
-        }
+        await syncAmountEntry(next, habitCountToday(habitCounts, current, done), done);
       }
       return true;
     } catch {
@@ -611,7 +581,7 @@ function useJourneyState() {
   }
 
 
-  return { earnedBadges,syncNotice,dismissSyncNotice: () => setSyncNotice(''),todoList,todoError,setTodoError,addTodo,completeTodo,reopenTodo,removeTodo,reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,stepHabit,habitCount,logHabit,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward,rejectAward };
+  return { earnedBadges,syncNotice,dismissSyncNotice: () => setSyncNotice(''),todoList,todoError,setTodoError,addTodo,completeTodo,reopenTodo,removeTodo,reviews,dueReviews,learnError,setLearnError,addLearning,reviewLearning,reminder,setReminder,reminderError,reminderNotice,testReminder,habits,routines,habitError,setHabitError,toggleHabit,setHabitAmount,habitCount,addHabit,updateHabit,removeHabit,analyzing,editNotice,entries,draft,setDraft,reward,levelUpShown,dismissLevelUp: () => setLevelUpShown(null),quest,questDone,streak,today,busy,loading,error,setError,timelineError,confirmDeleteId,setConfirmDeleteId,editingId,editDraft,setEditDraft,editError,setEditError,totalXp,skillTotals,addMoment,deleteMoment,startEditing,cancelEditing,saveEdit,correctAward,rejectAward };
 }
 const JourneyContext = createContext<ReturnType<typeof useJourneyState> | null>(null);
 export function JourneyProvider({ children }: { children: ReactNode }) {

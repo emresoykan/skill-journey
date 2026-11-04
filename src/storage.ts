@@ -11,8 +11,8 @@ import { parseSchemaVersion, pendingMigrations } from './migrations';
 // habitId: kayıt bir rutine tik atılarak oluştuysa o rutinin kimliği.
 // measures: rutin tikiyle girilen ölçüler (adım, dakika, sayfa).
 // learning: "Öğrendiklerim" kaydının kavramı ve anlamı. review: günün tekrar oturumu (kaç kavram hatırlandı).
-// tz: kaydın yazıldığı IANA saat dilimi (yeni kayıtlarda).
-export type Entry = Analysis & { id: string; createdAt: string; tz?: string; description: string; bonusXp?: number; habitId?: string; measures?: MeasureValues; learning?: Learning; review?: { count: number } };
+// tz: kaydın yazıldığı IANA saat dilimi (yeni kayıtlarda). amount: miktarlı rutinin o günkü toplamı ("20 kelime").
+export type Entry = Analysis & { id: string; createdAt: string; tz?: string; description: string; bonusXp?: number; habitId?: string; measures?: MeasureValues; amount?: { value: number; unit: string }; learning?: Learning; review?: { count: number } };
 const KEY = 'skill-journey:entries:v1';
 const HABITS_KEY = 'skill-journey:habits:v1';
 const REVIEWS_KEY = 'skill-journey:reviews:v1';
@@ -145,14 +145,18 @@ export async function saveBadges(badges: EarnedBadges): Promise<void> {
 }
 
 // Bekleyen göçleri sırayla çalıştırır. Her göçten önce etkilenen anahtarların ham hali SNAPSHOT_KEY'e
-// kopyalanır (son göçün öncesi saklanır). Bir göç hata verirse durur; sürüm ilerlemez, veri okumada
-// onarılmaya devam eder. Çalışan göçlerin sürümlerini döner.
+// kopyalanır. Aynı açılışta birden çok göç çalışırsa her anahtarın ilk (göçlerden önceki) hali saklanır,
+// sonraki göç bunu ezmez. Bir göç hata verirse durur; sürüm ilerlemez, veri okumada onarılmaya devam eder.
+// Çalışan göçlerin sürümlerini döner.
 export async function runMigrations(): Promise<number[]> {
   const done: number[] = [];
   let version = parseSchemaVersion(await AsyncStorage.getItem(META_KEY));
-  for (const migration of pendingMigrations(version)) {
+  const pending = pendingMigrations(version);
+  const snapshot: Record<string, string | null> = {};
+  for (const migration of pending) {
     const data = Object.fromEntries(await AsyncStorage.multiGet(migration.keys));
-    await AsyncStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ beforeVersion: migration.version, at: new Date().toISOString(), data }));
+    for (const key of migration.keys) if (!(key in snapshot)) snapshot[key] = data[key] ?? null;
+    await AsyncStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ beforeVersion: pending[0].version, at: new Date().toISOString(), data: snapshot }));
     const changes = Object.entries(migration.run(data)).filter((pair): pair is [string, string] => typeof pair[1] === 'string' && pair[1] !== data[pair[0]]);
     if (changes.length) await AsyncStorage.multiSet(changes);
     version = migration.version;
