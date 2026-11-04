@@ -22,6 +22,9 @@ const readNumber = (text: string) => {
 export function Routines() {
   const { habits, routines, entries, busy, loading, habitError, setHabitError, toggleHabit, habitCount } = useJourney();
   const [editing, setEditing] = useState(false);
+  // Son rutin kaldırılınca düzenleme modu kapanır; yoksa "Bitti" düğmesi gizlendiği için kart boş
+  // düzenleme modunda kalır ve ekleme formu görünmez.
+  if (editing && habits.length === 0) setEditing(false);
   const [adding, setAdding] = useState(false);
   const [logging, setLogging] = useState<string | null>(null);
   if (loading) return null;
