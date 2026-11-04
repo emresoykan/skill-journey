@@ -8,6 +8,7 @@ import { JourneyProvider } from '../journey-state';
 import { LevelUpModal } from '../LevelUpModal';
 import { tap } from '../feedback';
 import { prepareSounds } from '../sounds';
+import { registerServiceWorker } from '../pwa';
 
 // Home-screen icon for "Add to Home Screen" on iOS. On web the bundler turns the image into
 // { uri } with the base URL applied, so it follows the GitHub Pages subpath;
@@ -18,6 +19,7 @@ const baseUrl = (Constants.expoConfig?.experiments as { baseUrl?: string } | und
 
 export default function Layout() {
   useEffect(prepareSounds, []);
+  useEffect(registerServiceWorker, []);
   const insets = useSafeAreaInsets();
   // Web'de (iPhone ana ekran uygulaması dahil) sekme etiketleri ana ekran çizgisine yapışmasın: iOS alt güvenli alanı
   // 0 bildirebildiği için her zaman en az 20 px boşluk bırakılır (çubuk 49 px + boşluk). Telefon uygulamasında varsayılan kalır.
@@ -26,6 +28,10 @@ export default function Layout() {
     {Platform.OS === 'web' ? <Head>
       <title>Skill Journey</title>
       <meta name="apple-mobile-web-app-title" content="Skill Journey" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      <meta name="theme-color" content="#F7F8F4" />
       <link rel="apple-touch-icon" href={touchIcon} />
       <link rel="manifest" href={`${baseUrl}/manifest.webmanifest`} />
     </Head> : null}
