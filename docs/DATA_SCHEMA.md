@@ -13,7 +13,7 @@ uygulama açılırken, veriler okunmadan önce çalışır (bkz. "Göçler").
 |---|---|---|---|
 | `skill-journey:entries:v1` | `Entry[]` | `src/storage.ts` | evet |
 | `skill-journey:habits:v1` | `Habit[]` | `src/storage.ts`, `src/routines.ts` | evet |
-| `skill-journey:habit-counts:v1` | `{ [habitId]: { day, count } }` | `src/storage.ts` | evet |
+| `skill-journey:habit-counts:v1` | `{ [habitId]: { day, count } }` — miktarlı rutinin bugünkü toplamı | `src/storage.ts` | evet |
 | `skill-journey:todos:v1` | `Todo[]` | `src/todos.ts` | evet |
 | `skill-journey:reviews:v1` | `{ [entryId]: { stage, due } }` | `src/learning.ts` | evet |
 | `skill-journey:reminder:v1` | `{ enabled, hour, minute }` | `src/reminderStore.ts` | evet |
@@ -53,6 +53,7 @@ type Entry = {
                           // motorun ilk önerisi; değişmez. Kabul edilen hali `awards`'tır
                           // (çıkarılan öneri awards'ta yoktur, değiştirilen yerine yenisi gelir).
   xpNote?: string;        // XP neden azaldı (aynı gün çok kayıt)
+  amount?: { value: number; unit: string }; // miktarlı rutinin o günkü toplamı ("20 kelime")
 };
 ```
 
@@ -63,6 +64,8 @@ kayıtlardan yeniden hesaplanır.
 ## Diğerleri
 
 ```ts
+// unit varsa rutin miktarlıdır (her gün miktar girilir), target isteğe bağlı günlük hedeftir; unit yoksa tek tik.
+// measures/goalMinutes eski sürümün sabit ölçüleridir; artık kullanılmaz, silinmez.
 type Habit = { id; title; icon; skill; createdAt; target?; unit?; goalMinutes?; measures? };
 type Todo = { id; title; createdAt; doneAt?; entryId? };   // tamamlanınca entryId ilgili Entry'yi gösterir
 type ReviewState = { stage: number; due: 'YYYY-MM-DD' | '' }; // '' = ustalaşıldı
@@ -79,12 +82,14 @@ kayıt silinse de açık kalır.
 | Sürüm | Ne yapar |
 |---|---|
 | 1 | `awards` alanı olmayan kayıtlara `[{ skill, xp }]` ekler; "20 dk kitap oku" rutinini "Kitap okuma" yapar |
+| 2 | Hazır öneriler kaldırıldı: öneriden eklenmiş, birimi saklanmamış rutinlere birim/hedef yazar (Su iç → 8 bardak, Kitap okuma → sayfa, Yürüyüş yap → adım, Spor yap → dk) |
 
 Kurallar:
 - Göç öğe silmez.
 - Okuyamadığı ya da tanımadığı veriye dokunmaz.
 - İkinci kez çalışınca değişiklik üretmez.
-- Çalışmadan önce etkilenen anahtarların ham hali `snapshot:v1`'e yazılır.
+- Çalışmadan önce etkilenen anahtarların ham hali `snapshot:v1`'e yazılır. Aynı açılışta birden çok göç
+  çalışırsa her anahtarın göçlerden önceki ilk hali saklanır.
 - Hata verirse durur ve sürüm ilerlemez.
 
 ## Yazma kuralı
