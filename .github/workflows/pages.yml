@@ -32,6 +32,9 @@ jobs:
         run: |
           cp "dist/+not-found.html" dist/404.html
           touch dist/.nojekyll
+      # Service worker'a sitenin dosya listesini ve sürümünü yazar (çevrimdışı açılış).
+      - name: Offline cache list
+        run: node scripts/build-sw.mjs dist
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -42,6 +42,17 @@ Kayıtlar yalnız kullanıcının kendi tarayıcısında (AsyncStorage → local
 
 `main` dalına her gönderimde `.github/workflows/pages.yml` web sürümünü derleyip `https://emresoykan.github.io/skill-journey/` adresine yayınlar. İlk kez: repo **Settings → Pages → Source: GitHub Actions**. Alt yol (`/skill-journey`) yalnız bu derlemede `EXPO_BASE_URL` ile verilir (`app.config.js`); `npm run web` ve Cloudflare derlemesi etkilenmez.
 
+### Telefona kurulum (PWA)
+
+Web sürümü kurulabilir bir uygulamadır (`public/manifest.webmanifest`, `public/sw.js`):
+
+- **iPhone:** Safari → Paylaş → Ana Ekrana Ekle.
+- **Android:** Chrome → Uygulamayı yükle.
+
+Kurulan uygulama internetsiz de açılır. Service worker sitenin dosyalarını önbelleğe alır. Sayfalar önce internetten istenir, böylece yeni sürüm hemen gelir; bağlantı yoksa ya da 4 saniyede yanıt gelmezse saklanan sürüm açılır. Kayıtlar önbellekte değil tarayıcı deposunda durur; önbelleğin yenilenmesi onlara dokunmaz.
+
+Derlemeden sonra `node scripts/build-sw.mjs dist` dosya listesini ve içerik özetinden bir sürüm numarasını `dist/sw.js`'e yazar (GitHub Pages iş akışında otomatik). Sürüm değişince tarayıcı yeni service worker'ı kurar ve eski önbelleği siler. Service worker geliştirmede (`npm run web`) kaydedilmez.
+
 ### Cloudflare Pages (yedek)
 
 Cloudflare Pages projesi de `main`'den `https://skill-journey.pages.dev` adresine yayınlar. `pages.dev` adresleri bazı Türkiye ağlarında açılmadığı için asıl adres GitHub Pages'tir. Proje ayarları:
