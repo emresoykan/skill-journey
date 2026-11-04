@@ -19,16 +19,35 @@ import { BackupCard } from './BackupCard';
 import { EntryActionButtons, EntryDeleteConfirm, EntryEditForm, EntryEditNotice } from './EntryControls';
 import { Confetti } from './Confetti';
 import { setSoundEnabled, useSoundEnabled } from './sounds';
+import { useHydrated } from './useHydrated';
+import { GrowthOverview } from './GrowthOverview';
+import { MemoryFilters } from './MemoryFilters';
+import { discoveriesByEntry, filterEntries, filterOptions, type DateRange } from './insights';
+
+type GrowthTab = 'overview' | 'skills' | 'badges' | 'analytics';
+const growthTabs: { key: GrowthTab; label: string }[] = [
+  { key: 'overview', label: 'Genel' },
+  { key: 'skills', label: 'Beceriler' },
+  { key: 'badges', label: 'Başarılar' },
+  { key: 'analytics', label: 'Analiz' },
+];
 const teal = '#166B65';
 export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memories' }) {
   const { earnedBadges,syncNotice,dismissSyncNotice,analyzing,entries,draft,setDraft,reward,quest,questDone,streak,today,busy,loading,error,setError,timelineError,editingId,totalXp,skillTotals,addMoment,correctAward } = useJourney();
   const soundOn = useSoundEnabled();
+  const hydrated = useHydrated();
   const [query, setQuery] = useState('');
-  const terms = query.trim().toLocaleLowerCase('tr-TR').split(/\s+/).filter(Boolean);
-  const visibleEntries = entries.filter(entry => {
-    const haystack = [entry.description, ...entry.awards.map(award => displaySkill(award.skill))].join(' ').toLocaleLowerCase('tr-TR');
-    return terms.every(term => haystack.includes(term));
-  });
+  const [range, setRange] = useState<DateRange>('all');
+  const [domain, setDomain] = useState<string | null>(null);
+  const [skillFilter, setSkillFilter] = useState<string | null>(null);
+  const [growthTab, setGrowthTab] = useState<GrowthTab>('overview');
+  const filtering = !!query.trim() || range !== 'all' || !!domain || !!skillFilter;
+  const visibleEntries = section === 'memories' ? filterEntries(entries, { query, range, domain, skill: skillFilter }) : entries;
+  const options = section === 'memories' ? filterOptions(entries) : { skills: [], domains: [] };
+  const discoveries = section === 'memories' ? discoveriesByEntry(entries) : new Map<string, string[]>();
+  const clearFilters = () => { setQuery(''); setRange('all'); setDomain(null); setSkillFilter(null); };
+  // Statik HTML'de yalnız boş zemin; içerik tarayıcıda çizilir (bkz. useHydrated).
+  if (!hydrated) return <View style={s.safe} />;
   return <View style={s.safe}>
     <StatusBar style="dark" />
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -39,26 +58,33 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
         </View></View>
         {syncNotice ? <Pressable accessibilityRole="button" accessibilityHint="Uyarıyı kapatır" onPress={dismissSyncNotice} style={s.sync}><Text style={s.syncText}>{`🔄 ${syncNotice}  ✕`}</Text></Pressable> : null}
         {section === 'growth' ? <>
-        <PlayerCard totalXp={totalXp} streak={streak} />
-        {!loading ? <Badges entries={entries} earned={earnedBadges} /> : null}
-        <RoutineStreaks />
-        <WeeklyTotals />
-        {!loading ? <ProgressChart entries={entries} /> : null}
+        <View style={s.tabs} accessibilityRole="tablist">
+          {growthTabs.map(tab => <Pressable key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: growthTab === tab.key }} aria-selected={growthTab === tab.key} onPress={() => setGrowthTab(tab.key)} style={[s.tab, growthTab === tab.key && s.tabOn]}>
+            <Text style={[s.tabText, growthTab === tab.key && s.tabTextOn]} numberOfLines={1}>{tab.label}</Text>
+          </Pressable>)}
+        </View>
+        {loading ? <ActivityIndicator color={teal} /> : growthTab === 'overview' ? <>
+          <PlayerCard totalXp={totalXp} streak={streak} />
+          <GrowthOverview entries={entries} />
+          <BackupCard />
+        </> : growthTab === 'skills' ? <>
+          <View style={s.row}><Text style={s.section}>Becerilerin</Text><Text style={s.muted}>{skillTotals.length} beceri · {entries.length} kayıt</Text></View>
+          <SkillEvidence entries={entries} busy={busy} onCorrectAward={correctAward} />
+        </> : growthTab === 'badges' ? <Badges entries={entries} earned={earnedBadges} /> : <>
+          <ProgressChart entries={entries} />
+          <WeeklyTotals />
+          <RoutineStreaks />
+        </>}
         </> : null}
         {section === 'today' ? <>
-        <PlayerCard totalXp={totalXp} streak={streak} />
-        <ReviewCard>{reward?.kind === 'review' ? <RewardCard key={reward.id} reward={reward} /> : null}</ReviewCard>
-        <Routines />
+        <PlayerCard totalXp={totalXp} streak={streak} compact />
         <TodayLog today={today} draft={draft} error={error} busy={busy} disabled={loading} onChangeDraft={v => { setDraft(v); setError(''); }} onAdd={addMoment}>
           {reward && (reward.kind === 'moment' || reward.kind === 'habit') ? <RewardCard key={reward.id} reward={reward} /> : analyzing ? <Text style={s.analyzing}>✦ Becerilerin hesaplanıyor…</Text> : null}
         </TodayLog>
+        <Routines />
+        <ReviewCard>{reward?.kind === 'review' ? <RewardCard key={reward.id} reward={reward} /> : null}</ReviewCard>
         <LearnCard>{reward?.kind === 'learning' ? <RewardCard key={reward.id} reward={reward} /> : null}</LearnCard>
         {!loading ? <DailyQuest quest={quest} done={questDone} /> : null}
-        </> : null}
-        {section === 'growth' ? <>
-        <View style={s.row}><Text style={s.section}>Beceri ağacın</Text><Text style={s.muted}>{skillTotals.length} beceri · {entries.length} kayıt</Text></View>
-        <SkillEvidence entries={entries} busy={busy} onCorrectAward={correctAward} />
-        <BackupCard />
         </> : null}
         {section === 'memories' ? <>
         <Text style={s.section}>Anılarını bul</Text>
@@ -66,16 +92,18 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
           <TextInput accessibilityLabel="Anılarda ara" placeholder="Kayıt veya beceri ara..." placeholderTextColor="#657482" value={query} onChangeText={setQuery} style={[s.editInput, { flex: 1, minWidth: 0, minHeight: 48, fontSize: 15, color: '#182637', backgroundColor: 'white', marginBottom: 0 }]} />
           <MicButton value="" onChangeText={setQuery} size={48} />
         </View>
-        {query ? <Pressable accessibilityRole="button" onPress={() => setQuery('')}><Text style={[s.editText, { marginBottom: 12 }]}>Aramayı temizle · {visibleEntries.length} kayıt bulundu</Text></Pressable> : null}
-        {!loading && !query ? <PastSelf entries={entries} /> : null}
-        <LearningNotebook query={query} />
+        {!loading && entries.length ? <MemoryFilters range={range} domain={domain} skill={skillFilter} domains={options.domains} skills={options.skills} onRange={setRange} onDomain={setDomain} onSkill={setSkillFilter} /> : null}
+        {filtering ? <Pressable accessibilityRole="button" onPress={clearFilters}><Text style={[s.editText, { marginBottom: 12 }]}>Filtreleri temizle · {visibleEntries.length} kayıt bulundu</Text></Pressable> : null}
+        {!loading && !filtering ? <PastSelf entries={entries} /> : null}
+        {/* Defter kendi aramasını kullanır; tarih, alan ya da beceri filtresi seçiliyken gizlenir. */}
+        {range === 'all' && !domain && !skillFilter ? <LearningNotebook query={query} /> : null}
         <Text style={s.section}>Zaman çizelgesi</Text>
         {timelineError ? <Text style={s.error}>{timelineError}</Text> : null}
         {loading ? <ActivityIndicator color={teal} /> : visibleEntries.length === 0 ? (
           <View style={s.empty}>
             <Text style={s.emptyIcon}>✧</Text>
-            <Text style={s.emptyTitle}>{query ? 'Eşleşen kayıt bulunamadı' : 'Hikâyen burada başlıyor'}</Text>
-            <Text style={s.emptyText}>{query ? 'Başka bir kelimeyle aramayı deneyebilirsin.' : 'Bugün sekmesinden ilk kaydını ekle.'}</Text>
+            <Text style={s.emptyTitle}>{filtering ? 'Eşleşen kayıt bulunamadı' : 'Hikâyen burada başlıyor'}</Text>
+            <Text style={s.emptyText}>{filtering ? 'Başka bir kelime ya da filtre deneyebilirsin.' : 'Bugün sekmesinden ilk kaydını ekle.'}</Text>
           </View>
         ) : groupByDay(visibleEntries).map(group => <View key={group.key} style={s.dayGroup}>
           <View style={s.dayHead}><Text style={s.dayTitle}>{dayLabel(group.date)}</Text><Text style={s.muted}>{group.entries.length} şey · +{group.xp} XP</Text></View>
@@ -89,6 +117,7 @@ export function JourneyScreen({ section }: { section: 'today' | 'growth' | 'memo
               </View>
               {editingId === entry.id ? <EntryEditForm entry={entry} /> : (
                 <View>
+                  {discoveries.has(entry.id) ? <Text style={s.milestone}>{`✦ İlk kez: ${discoveries.get(entry.id)!.map(displaySkill).join(', ')}`}</Text> : null}
                   <Text style={s.description}>{entry.description}</Text>
                   <Text style={s.awardSummary}>{entry.awards.map(award => `${displaySkill(award.skill)} +${award.xp}`).join(' · ')}{entry.bonusXp ? ` · 🎯 Görev +${entry.bonusXp}` : ''}{entry.habitId ? ' · 🔁 Rutin' : ''}</Text>
                   <View style={s.entryFoot}>
@@ -130,5 +159,11 @@ const s = StyleSheet.create({
   awardSummary: { color: teal, fontSize: 11, lineHeight: 17, marginTop: 9 },
   sync: { backgroundColor: '#FCEBB5', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
   syncText: { color: '#664708', fontSize: 12, fontWeight: '700', lineHeight: 17 },
+  tabs: { flexDirection: 'row', backgroundColor: '#EEF2EE', borderRadius: 14, padding: 4, gap: 4, marginBottom: 18 },
+  tab: { flex: 1, minWidth: 0, borderRadius: 10, paddingVertical: 9, alignItems: 'center' },
+  tabOn: { backgroundColor: 'white', shadowColor: '#182637', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  tabText: { color: '#657482', fontSize: 13, fontWeight: '800' },
+  tabTextOn: { color: teal },
+  milestone: { alignSelf: 'flex-start', color: '#664708', backgroundColor: '#FCEBB5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800', marginTop: 8, overflow: 'hidden' },
   analyzing: { color: '#8B5B00', backgroundColor: '#FFF7DF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginTop: 12, fontSize: 13, fontWeight: '700', overflow: 'hidden' },
 });

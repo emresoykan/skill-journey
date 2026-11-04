@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DAILY_GOAL, entryXp } from './game';
 import { displaySkill } from './skillEngine';
@@ -13,6 +13,14 @@ import type { Entry } from './storage';
 const teal = '#166B65';
 const gold = '#F5C45A';
 const MODE_KEY = 'skill-journey:entry-mode:v1';
+// Hızlı başlangıçlar: cümlenin başını yazar, gerisini kullanıcı tamamlar. Fiiller beceri motorunun derinlik
+// algısıyla uyumludur (ilk kez → ilk temas, öğrendim → öğrendi, bitirdim → üretti, öğrettim → öğretti).
+const TEMPLATES = [
+  { label: '✨ İlk kez', text: 'Bugün ilk kez ' },
+  { label: '📘 Öğrendim', text: 'Bugün öğrendim: ' },
+  { label: '✅ Bitirdim', text: 'Bugün bitirdim: ' },
+  { label: '🧑‍🏫 Öğrettim', text: 'Bugün birine öğrettim: ' },
+];
 type Mode = 'done' | 'todo';
 
 type Props = {
@@ -34,6 +42,7 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
   const xp = today.reduce((sum, entry) => sum + entryXp(entry), 0);
   const { editingId, todoList, todoError, setTodoError, addTodo } = useJourney();
   // Son seçilen mod (Yaptım / Yapacağım) hatırlanır; uygulama yeniden açılınca onunla başlar.
+  const input = useRef<TextInput>(null);
   const [mode, setModeState] = useState<Mode>('done');
   useEffect(() => {
     AsyncStorage.getItem(MODE_KEY).then(value => { if (value === 'todo') setModeState('todo'); }).catch(() => {});
@@ -64,6 +73,7 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
     </View>
     <View style={s.inputRow}>
       <TextInput
+        ref={input}
         accessibilityLabel={planning ? 'Yapılacak iş' : 'Bugün ne yaptın, ne yaşadın?'}
         placeholder={planning ? 'örn. Bütçe raporunu bitir' : 'örn. İlk kez sunum yaptım'}
         placeholderTextColor="#9AA6A8"
@@ -80,6 +90,11 @@ export function TodayLog({ today, draft, error, busy, disabled, onChangeDraft, o
         {busy ? <ActivityIndicator color="white" /> : <Text style={s.addText}>+</Text>}
       </Pressable>
     </View>
+    {!planning && !draft.trim() ? <View style={s.templates}>
+      {TEMPLATES.map(template => <Pressable key={template.label} accessibilityRole="button" accessibilityLabel={`Şablon: ${template.text.trim()}`} onPress={() => { change(template.text); input.current?.focus(); }} style={s.template}>
+        <Text style={s.templateText}>{template.label}</Text>
+      </Pressable>)}
+    </View> : null}
     {error || todoError ? <Text style={s.error}>{error || todoError}</Text> : null}
     {children}
     <OpenTodos />
@@ -115,6 +130,9 @@ const s = StyleSheet.create({
   segments: { flexDirection: 'row', gap: 6, marginTop: 12, marginBottom: 14 },
   segment: { flex: 1, height: 7, borderRadius: 4, backgroundColor: '#E2E9E4' },
   segmentOn: { backgroundColor: gold },
+  templates: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  template: { borderRadius: 14, borderWidth: 1, borderColor: '#E2E9E4', backgroundColor: '#FAFBF9', paddingHorizontal: 10, paddingVertical: 6 },
+  templateText: { color: '#3D4B58', fontSize: 12, fontWeight: '700' },
   modes: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   mode: { borderRadius: 12, borderWidth: 1, borderColor: '#D5DFDA', backgroundColor: 'white', paddingHorizontal: 12, paddingVertical: 7 },
   modeOn: { backgroundColor: teal, borderColor: teal },

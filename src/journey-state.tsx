@@ -1,7 +1,7 @@
 import { createContext, use, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { analyzeExperience, displaySkill, isNearDuplicate, isWithin, type Analysis } from './skillEngine';
-import { loadBadges, loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, runMigrations, saveBadges, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, StorageConflictError, type EarnedBadges, type Entry } from './storage';
+import { loadBadges, loadDraft, saveDraft, loadEntries, loadHabitCounts, loadHabits, loadReviews, loadTodos, runMigrations, saveBadges, saveEntries, saveHabitCounts, saveHabits, saveReviews, saveTodos, StorageConflictError, type EarnedBadges, type Entry } from './storage';
 import { cleanTodoTitle, todoTitleError, visibleTodos, type Todo } from './todos';
 import { dueLearnings, learningAnalysis, learningDescription, learningError, nextReview, reviewAnalysis, reviewDescription, reviewEntryToday, reviewStateOf, REVIEW_XP, type Reviews } from './learning';
 import { amountDescription, amountReached, dayKey, DEFAULT_REMINDER, formatAmount, habitAnalysis, habitCountToday, habitGoal, habitSettingsError, habitTitleError, isAmountHabit, MAX_AMOUNT, routinesProgress, type Habit, type HabitCounts, type ReminderSettings } from './routines';
@@ -38,6 +38,7 @@ function useJourneyState() {
   const [reminderError, setReminderError] = useState('');
   const [reminderNotice, setReminderNotice] = useState('');
   const [draft, setDraft] = useState('');
+  const draftLoaded = useRef(false);
   const [reward, setReward] = useState<Reward | null>(null);
   const [levelUpShown, setLevelUpShown] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,6 +109,14 @@ function useJourneyState() {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  // Yazılmamış metin açılışta geri gelir ve değiştikçe saklanır. Okuma bitmeden yazılmaz ki saklı taslak silinmesin.
+  useEffect(() => {
+    loadDraft().then(saved => { if (saved) setDraft(current => current || saved); }).catch(() => {}).finally(() => { draftLoaded.current = true; });
+  }, []);
+  useEffect(() => {
+    if (draftLoaded.current) saveDraft(draft).catch(() => {});
+  }, [draft]);
 
   // Kayıtlarla açılan rozetler kalıcı listeye yazılır; kayıt silinse de rozet geri alınmaz.
   // İlk eşitlemede (kalıcı listeden önce kazanılmış rozetler) tarih bilinmediği için boş bırakılır.
